@@ -476,28 +476,39 @@
         }
     }
 
-    function applyHardwareZoom(ratio) {
-        const track = getVideoTrack();
-        if (!track || !hwZoomRange) return Promise.resolve(true);
+function applyHardwareZoom(ratio) {
+    const track = getVideoTrack();
+    if (!track || !hwZoomRange) return Promise.resolve(true);
 
-        const min = hwZoomRange.min;
-        const max = hwZoomRange.max;
-        const step = hwZoomRange.step;
+    const min  = hwZoomRange.min;
+    const max  = hwZoomRange.max;
 
-        let value = clamp(min * ratio, min, max);
-        if (step > 0) {
-            value = min + Math.round((value - min) / step) * step;
-            value = clamp(value, min, max);
-        }
+    // Force 0.01 precision regardless of what the device reports
+    const PRECISION_STEP = 0.01;
 
-        try {
-            return track.applyConstraints({ advanced: [{ zoom: value }] })
-                .then(function () { return true; })
-                .catch(function () { return false; });
-        } catch (e) {
-            return Promise.resolve(false);
-        }
-    }
+    let value = clamp(min * ratio, min, max);
+
+    // Round to 2 decimal places (0.01)
+    value = Math.round(value / PRECISION_STEP) * PRECISION_STEP;
+    value = clamp(value, min, max);
+
+    // Keep the original step available as a fallback if applyConstraints fails
+    const deviceStep = hwZoomRange.step;
+
+    const tryApply = (v) => track.applyConstraints({ advanced: [{ zoom: v }] });
+
+    return tryApply(value)
+        .then(() => true)
+        .catch(() => {
+            // Device rejected the fine value — fall back to its native step
+            if (deviceStep > 0) {
+                const snapped = min + Math.round((value - min) / deviceStep) * deviceStep;
+                const snappedClamped = clamp(snapped, min, max);
+                return tryApply(snappedClamped).then(() => true).catch(() => false);
+            }
+            return false;
+        });
+}
 
     /* ------------------------------------------------------------------ *
      *  Zoom application: hardware first, CSS scale for the remainder
