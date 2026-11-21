@@ -695,13 +695,20 @@ setFrozen(!isFrozen);
 });
 }
 
-function setupFullscreenAndStyle() {
-document.addEventListener('pointerdown', function () {
+function requestFullscreenIfNeeded() {
+if (document.fullscreenElement || document.webkitFullscreenElement) return;
 const el = document.documentElement;
-if (el.requestFullscreen) el.requestFullscreen().catch(function () {});
-else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-}, { once: true });
+const request = el.requestFullscreen || el.webkitRequestFullscreen;
+if (!request) return;
+try {
+const result = request.call(el);
+if (result && typeof result.catch === 'function') {
+result.catch(function () {});
+}
+} catch (e) {}
+}
 
+document.addEventListener('pointerdown', requestFullscreenIfNeeded);
 document.body.addEventListener('touchmove', function (e) {
 if (sliderContainer.contains(e.target)) return;
 if (e.cancelable) e.preventDefault();
