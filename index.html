@@ -140,6 +140,12 @@ flex: 0 0 50px;
 z-index: 30;
 }
 
+body.frozen-mode .zoom-bar-container,
+body.frozen-mode #flipBtn,
+body.frozen-mode .zoom-readout {
+display: none;
+}
+
 .flip-button svg {
 width: 28px;
 height: 28px;
@@ -187,7 +193,7 @@ left: 0;
 width: 28px;
 height: 28px;
 border-radius: 3px;
-background: linear-gradient(90deg, #0f0,#0ff,#00f);
+background: linear-gradient(90deg, #0ff, #00f);
 box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 pointer-events: none;
 z-index: 1;
@@ -330,15 +336,15 @@ let sliderRect = null;
 let lastDragEnd = 0;
 
 const filters = [
-{ name: 'Normal', value: 'none', accent: '#fff' },
+{ name: 'Original', value: 'none', accent: '#fff' },
 { name: 'Gray', value: 'grayscale(1)', accent: '#666' },
 { name: 'Invert', value: 'invert(1)', accent: '#fff' },
-{ name: 'Red', value: 'grayscale(1) sepia(1) saturate(6) hue-rotate(-42deg)', accent: '#f66' },
-{ name: 'Green', value: 'grayscale(1) sepia(1) saturate(6) hue-rotate(78deg)', accent: '#6f6' },
-{ name: 'Blue', value: 'grayscale(1) sepia(1) saturate(6) hue-rotate(198deg)', accent: '#66f' }
+{ name: 'Red', value: 'grayscale(1) sepia(1) saturate(100) hue-rotate(-42deg)', accent: '#f66' },
+{ name: 'Green', value: 'grayscale(1) sepia(1) saturate(100) hue-rotate(78deg)', accent: '#6f6' },
+{ name: 'Blue', value: 'grayscale(1) sepia(1) saturate(100) hue-rotate(198deg)', accent: '#66f' }
 ];
-
 let filterIndex = 0;
+
 function showToast(message, duration) {
 duration = duration || 1500;
 const old = document.querySelector('.toast-msg');
@@ -526,8 +532,8 @@ const sx = (vw - sw) / 2;
 const sy = (vh - sh) / 2;
 
 const canvas = document.createElement('canvas');
-canvas.width  = Math.max(1, Math.round(sw));
-canvas.height = Math.max(1, Math.round(sh));
+canvas.width  = vw;
+canvas.height = vh;
 const ctx = canvas.getContext('2d');
 if (!ctx) {
 showToast('Capture failed', 900);
@@ -538,7 +544,7 @@ if (facingMode === 'user') {
 ctx.translate(canvas.width, 0);
 ctx.scale(-1, 1);
 }
-ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+ctx.drawImage(video, sx, sy, sw, sh, 0, 0, vw, vh);
 
 canvas.toBlob(function (blob) {
 if (blob) {
@@ -563,6 +569,7 @@ setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
 
 function setFrozen(frozen) {
 isFrozen = frozen;
+document.body.classList.toggle('frozen-mode', isFrozen);
 freezeBtn.classList.toggle('frozen', isFrozen);
 if (isFrozen) {
 video.pause();
@@ -574,8 +581,10 @@ showToast('Live preview', 900);
 }
 
 function stopStream() {
+++hwRequestSeq;
 if (isFrozen) {
 isFrozen = false;
+document.body.classList.remove('frozen-mode');
 freezeBtn.classList.remove('frozen');
 }
 
@@ -702,7 +711,6 @@ if (el.requestFullscreen) el.requestFullscreen().catch(function () {});
 else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
 }, { once: true });
 
-document.addEventListener('pointerdown', requestFullscreenIfNeeded);
 document.body.addEventListener('touchmove', function (e) {
 if (sliderContainer.contains(e.target)) return;
 if (e.cancelable) e.preventDefault();
