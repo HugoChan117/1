@@ -695,18 +695,12 @@ setFrozen(!isFrozen);
 });
 }
 
-function requestFullscreenIfNeeded() {
-if (document.fullscreenElement || document.webkitFullscreenElement) return;
+function setupFullscreenAndStyle() {
+document.addEventListener('pointerdown', function () {
 const el = document.documentElement;
-const request = el.requestFullscreen || el.webkitRequestFullscreen;
-if (!request) return;
-try {
-const result = request.call(el);
-if (result && typeof result.catch === 'function') {
-result.catch(function () {});
-}
-} catch (e) {}
-}
+if (el.requestFullscreen) el.requestFullscreen().catch(function () {});
+else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+}, { once: true });
 
 document.addEventListener('pointerdown', requestFullscreenIfNeeded);
 document.body.addEventListener('touchmove', function (e) {
