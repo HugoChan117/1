@@ -187,7 +187,7 @@ left: 0;
 width: 28px;
 height: 28px;
 border-radius: 3px;
-background: linear-gradient(90deg, #0ff, #00f);
+background: linear-gradient(90deg, #0f0,#0ff,#00f);
 box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 pointer-events: none;
 z-index: 1;
@@ -330,15 +330,15 @@ let sliderRect = null;
 let lastDragEnd = 0;
 
 const filters = [
-{ name: 'Original', value: 'none', accent: '#fff' },
+{ name: 'Normal', value: 'none', accent: '#fff' },
 { name: 'Gray', value: 'grayscale(1)', accent: '#666' },
 { name: 'Invert', value: 'invert(1)', accent: '#fff' },
-{ name: 'Red', value: 'grayscale(1) sepia(1) saturate(100) hue-rotate(-42deg)', accent: '#f66' },
-{ name: 'Green', value: 'grayscale(1) sepia(1) saturate(100) hue-rotate(78deg)', accent: '#6f6' },
-{ name: 'Blue', value: 'grayscale(1) sepia(1) saturate(100) hue-rotate(198deg)', accent: '#66f' }
+{ name: 'Red', value: 'grayscale(1) sepia(1) hue-rotate(-42deg)', accent: '#f66' },
+{ name: 'Green', value: 'grayscale(1) sepia(1) hue-rotate(78deg)', accent: '#6f6' },
+{ name: 'Blue', value: 'grayscale(1) sepia(1) hue-rotate(198deg)', accent: '#66f' }
 ];
-let filterIndex = 0;
 
+let filterIndex = 0;
 function showToast(message, duration) {
 duration = duration || 1500;
 const old = document.querySelector('.toast-msg');
