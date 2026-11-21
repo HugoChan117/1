@@ -265,8 +265,8 @@ border: 1px solid rgba(255, 255, 255, 0.2);
 <div class="right-actions">
 <div class="action-btn flip-button" id="flipBtn">
 <svg viewBox="0 0 24 24" aria-hidden="true">
-<path d="M2 8v8a4 4 0 0 0 4 4h2" />
-<path d="M22 16V8a4 4 0 0 0-4-4h-2" />
+<path d="M2 8v8a4 4 0 0 0 4 4h6" />
+<path d="M22 16V8a4 4 0 0 0-4-4h-6" />
 <circle cx="12" cy="12" r="3" />
 <path d="M7 3 5 5l2 2" />
 <path d="M17 21l2-2-2-2" />
@@ -294,10 +294,19 @@ border: 1px solid rgba(255, 255, 255, 0.2);
 </div>
 <div class="action-btn" id="freezeBtn">
 <svg viewBox="0 0 24 24" aria-hidden="true">
-<path d="M12 2v20M3.34 7l17.32 10M3.34 17 20.66 7" />
-<path d="m8.5 4 3.5 2 3.5-2M8.5 20l3.5-2 3.5 2M3.5 11l3.5-1 1-3M20.5 13l-3.5 1-1 3M3.5 13l3.5 1 1 3M20.5 11l-3.5-1-1-3" />
-</svg>
-</div>
+  <defs>
+    <g id="snowflake-arm">
+      <line x1="12" y1="12" x2="12" y2="2" />
+      <polyline points="8.5 4 12 6 15.5 4" />
+    </g>
+  </defs>
+  <use href="#snowflake-arm" />
+  <use href="#snowflake-arm" transform="rotate(60 12 12)" />
+  <use href="#snowflake-arm" transform="rotate(120 12 12)" />
+  <use href="#snowflake-arm" transform="rotate(180 12 12)" />
+  <use href="#snowflake-arm" transform="rotate(240 12 12)" />
+  <use href="#snowflake-arm" transform="rotate(300 12 12)" />
+</svg></div>
 </div>
 
 <div class="zoom-bar-container">
@@ -321,8 +330,8 @@ const filterBtn        = document.getElementById('filterBtn');
 const photoBtn         = document.getElementById('photoBtn');
 const freezeBtn        = document.getElementById('freezeBtn');
 const zoomReadout      = document.getElementById('zoomReadout');
-const MIN_ZOOM   = 1.0;
-const MAX_ZOOM   = 16.0;
+const MIN_ZOOM   = 1;
+const MAX_ZOOM   = 16;
 const THUMB_SIZE = 28;
 const LOG_MIN    = Math.log(MIN_ZOOM);
 const LOG_MAX    = Math.log(MAX_ZOOM);
@@ -459,7 +468,7 @@ if (!sliderRect) sliderRect = sliderContainer.getBoundingClientRect();
 const travel = Math.max(1, sliderRect.width - THUMB_SIZE);
 const thumbX = (percent / 100) * travel;
 
-zoomReadout.textContent = currentZoom.toFixed(1) + '×';
+zoomReadout.textContent = (currentZoom < 10 ? (Math.floor(currentZoom * 10) / 10).toFixed(1) : Math.floor(currentZoom+0.01).toString()) + '×';
 sliderThumb.style.left = thumbX + 'px';
 sliderFill.style.width = (thumbX + THUMB_SIZE) + 'px';
 }
@@ -688,7 +697,7 @@ setTimeout(function () { sliderRect = null; updateZoomUI(); }, 300);
 });
 
 zoomReadout.addEventListener('click', function () {
-setZoom(MIN_ZOOM);
+if (currentZoom < 1.1) {setZoom(3);} else {setZoom(1);}
 });
 
 flipBtn.addEventListener('click', function (e) {
