@@ -83,7 +83,14 @@
         font-weight: 500;
         font-variant-numeric: tabular-nums;
         z-index: 30;
-        pointer-events: none;
+        pointer-events: auto;
+        cursor: pointer;
+        transition: background 0.18s ease, transform 0.18s ease;
+    }
+
+    .zoom-readout:active {
+        background: rgba(55, 55, 55, 0.8);
+        transform: scale(0.92);
     }
 
     .action-btn,
@@ -125,6 +132,10 @@
         border-color: rgba(255, 255, 255, 0.75);
         box-shadow: 0 0 16px rgba(0, 122, 255, 0.7);
     }
+
+    #filterBtn { border-color: rgba(255, 255, 255, 0.25); }
+    #filterBtn.invert-mode { filter: invert(1); }
+    #filterBtn svg { stroke: var(--filter-accent, white); }
 
     .flip-button {
         flex: 0 0 50px;
@@ -177,7 +188,7 @@
         left: 0;
         width: 28px;
         height: 28px;
-        background: linear-gradient(90deg, #888, #36c);
+        background: linear-gradient(90deg, #0ff, #00f);
         box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
         pointer-events: none;
         z-index: 1;
@@ -235,7 +246,7 @@
     <video id="video" autoplay playsinline muted></video>
 </div>
 
-<div class="zoom-readout" id="zoomReadout" aria-live="polite">1.0×</div>
+<div class="zoom-readout" id="zoomReadout" role="button" tabindex="0" aria-label="Reset zoom to 1.0×" title="Reset zoom">1.0×</div>
 
 <div class="right-actions">
     <div class="action-btn flip-button" id="flipBtn" role="button" aria-label="Switch camera">
@@ -324,12 +335,12 @@
     let lastDragEnd = 0;
 
     const filters = [
-    { name: 'Original', value: 'none' },
-    { name: 'Black',    value: 'grayscale(1)' },
-    { name: 'Invert',   value: 'grayscale(1) invert(1)' },
-    { name: 'Red',      value: 'grayscale(1) sepia(1) saturate(6) hue-rotate(-50deg)' },
-    { name: 'Green',    value: 'grayscale(1) sepia(1) saturate(6) hue-rotate(50deg)' },
-    { name: 'Blue',     value: 'grayscale(1) sepia(1) saturate(6) hue-rotate(170deg)' }
+    { name: 'Original', value: 'none', accent: '#fff', glow: 'transparent' },
+    { name: 'Black',    value: 'brightness(0.35)', accent: '#666', glow: 'rgba(180, 180, 180, 0.35)' },
+    { name: 'Invert',   value: 'invert(1)', accent: '#fff', glow: 'rgba(255, 255, 255, 0.35)' },
+    { name: 'Red',      value: 'grayscale(1) sepia(1) saturate(6) hue-rotate(-50deg)', accent: '#ff4b4b', glow: 'rgba(255, 75, 75, 0.45)' },
+    { name: 'Green',    value: 'grayscale(1) sepia(1) saturate(6) hue-rotate(50deg)', accent: '#43d17a', glow: 'rgba(67, 209, 122, 0.45)' },
+    { name: 'Blue',     value: 'grayscale(1) sepia(1) saturate(6) hue-rotate(170deg)', accent: '#4b9dff', glow: 'rgba(75, 157, 255, 0.45)' }
 ];
     let filterIndex = 0;
 
@@ -361,6 +372,9 @@
     function setFilter(index) {
         filterIndex = (index + filters.length) % filters.length;
         video.style.filter = activeFilter();
+        filterBtn.classList.toggle('invert-mode', filters[filterIndex].name === 'Invert');
+        filterBtn.style.setProperty('--filter-accent', filters[filterIndex].accent);
+        filterBtn.style.setProperty('--filter-glow', filters[filterIndex].glow);
         const label = 'Filter: ' + filters[filterIndex].name;
         filterBtn.setAttribute('aria-label', label);
         showToast(filters[filterIndex].name + ' filter', 900);
@@ -658,6 +672,16 @@ function applyHardwareZoom(ratio) {
             setTimeout(function () { sliderRect = null; updateZoomUI(); }, 300);
         });
 
+        zoomReadout.addEventListener('click', function () {
+            setZoom(MIN_ZOOM);
+        });
+        zoomReadout.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setZoom(MIN_ZOOM);
+            }
+        });
+
         flipBtn.addEventListener('click', function (e) {
             e.preventDefault();
             flipCamera();
@@ -700,9 +724,7 @@ function applyHardwareZoom(ratio) {
             if (!track || track.readyState === 'ended' || track.muted) {
                 initCamera(facingMode);
             } else {
-                video.play().catch(function () {
-                    initCamera(facingMode);
-                });
+                video.play().catch(function () {});
             }
         });
     }
@@ -726,6 +748,7 @@ function applyHardwareZoom(ratio) {
         });
     }
 
+    setFilter(filterIndex);
     bindEvents();
     setupFullscreenAndStyle();
     wakeLock();
