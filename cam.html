@@ -442,7 +442,9 @@ return false;
 }
 
 function applyCssZoom(scale) {
-video.style.transform = scale > 1.001 ? 'scale(' + scale + ')' : '';
+const mirror = facingMode === 'user' ? 'scaleX(-1) ' : '';
+const zoom = scale > 1.001 ? 'scale(' + scale + ')' : '';
+video.style.transform = mirror + zoom;
 }
 
 function updateZoomUI() {
@@ -541,6 +543,10 @@ showToast('Capture failed', 900);
 return;
 }
 ctx.filter = activeFilter();
+if (facingMode === 'user') {
+ctx.translate(canvas.width, 0);
+ctx.scale(-1, 1);
+}
 ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
 
 canvas.toBlob(function (blob) {
