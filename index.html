@@ -1,1017 +1,372 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>Lens · Capture</title>
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Magnifier</title>
 <style>
-* {
-font-family: Roboto, Arial, Consolas, Sans-Serif;
-margin: 0;
-padding: 0;
-box-sizing: border-box;
-user-select: none;
--webkit-user-select: none;
--webkit-tap-highlight-color: transparent;
-}
+:root{--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);--sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#000;color:#fff;overflow:hidden;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none;overscroll-behavior:none;touch-action:none}
+#stage{position:fixed;inset:0;overflow:hidden;background:#000;touch-action:none}
+#cam{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;object-position:center;transform-origin:50% 50%;will-change:transform;background:#0a0a0a}
+#hud{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;justify-content:flex-end;gap:10px;padding:calc(12px + var(--st)) calc(14px + var(--sr)) 12px calc(14px + var(--sl));pointer-events:none}
+#torch,#lens{pointer-events:auto;width:46px;height:46px;padding:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#fff;background:rgba(20,20,24,.62);border:1px solid rgba(255,255,255,.14);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);transition:background .18s,color .18s,transform .08s}
+#torch[hidden],#lens[hidden]{display:none}
+#torch.on{background:#ffe9a8;color:#2a1f00;border-color:#ffe9a8;box-shadow:0 0 22px rgba(255,225,140,.55)}
+#torch:active,#lens:active{transform:scale(.92)}
+#torch svg,#lens svg{width:22px;height:22px;display:block}
+#ui{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:44px calc(20px + var(--sr)) calc(20px + var(--sb)) calc(20px + var(--sl));background:linear-gradient(to top,rgba(0,0,0,.86),rgba(0,0,0,.5) 45%,rgba(0,0,0,0))}
+.rbtn{flex:0 0 auto;width:64px;height:64px;padding:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#fff;font-size:30px;font-weight:400;line-height:1;font-family:inherit;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:transform .08s,background .15s,opacity .15s;touch-action:manipulation}
+.rbtn:active{transform:scale(.9);background:rgba(255,255,255,.22)}
+.rbtn:disabled{opacity:.3;pointer-events:none}
+#pill{display:flex;align-items:baseline;gap:2px;padding:9px 20px;border-radius:999px;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.02em;background:rgba(20,20,24,.62);border:1px solid rgba(255,255,255,.14);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+#pill .x{font-size:12px;font-weight:500;opacity:.6}
+#error{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:24px;text-align:center;background:rgba(0,0,0,.9)}
+#error[hidden]{display:none}
+#error .card{max-width:340px}
+#error h1{font-size:19px;font-weight:600;margin:0 0 10px}
+#error p{font-size:14px;line-height:1.5;color:#b9b9c0;margin:0 0 20px}
+#retry{padding:12px 26px;border-radius:999px;border:none;cursor:pointer;background:#fff;color:#000;font-size:15px;font-weight:600;font-family:inherit}
+#retry:active{transform:scale(.96)}
 
-html, body { height: 100%; }
-
-body {
-background: #000;
-overflow: hidden;
-position: fixed;
-width: 100%;
-height: 100%;
-top: 0;
-left: 0;
-touch-action: none;
-overscroll-behavior: none;
-}
-
-.camera-container {
-position: absolute;
-top: 0;
-left: 0;
-width: 100%;
-height: 100%;
-overflow: hidden;
-background: #000;
-display: flex;
-align-items: center;
-justify-content: center;
-}
-
-video {
-width: 100%;
-height: 100%;
-object-fit: cover;
-display: block;
-pointer-events: none;
-transform-origin: center center;
-will-change: transform;
-backface-visibility: hidden;
-}
-
-.right-actions {
-position: absolute;
-top: max(24px, env(safe-area-inset-top));
-right: max(16px, env(safe-area-inset-right));
-display: flex;
-flex-direction: row;
-gap: 10px;
-z-index: 30;
-}
-
-.zoom-readout {
-position: absolute;
-top: max(24px, env(safe-area-inset-top));
-left: max(16px, env(safe-area-inset-left));
-width: 50px;
-height: 50px;
-display: flex;
-align-items: center;
-justify-content: center;
-border-radius: 50%;
-background: rgba(15, 15, 15, 0.7);
-backdrop-filter: blur(10px);
--webkit-backdrop-filter: blur(10px);
-border: 1px solid rgba(255, 255, 255, 0.25);
-color: #fff;
-box-shadow: 0 6px 14px rgba(0, 0, 0, 0.6);
-font-size: 16px;
-font-weight: 500;
-font-variant-numeric: tabular-nums;
-z-index: 30;
-pointer-events: auto;
-cursor: pointer;
-transition: background 0.18s ease, transform 0.18s ease;
-}
-
-.zoom-readout:active {
-background: rgba(55, 55, 55, 0.8);
-transform: scale(0.92);
-}
-
-.action-btn,
-.flip-button {
-width: 50px;
-height: 50px;
-border-radius: 32px;
-background: rgba(15, 15, 15, 0.65);
-backdrop-filter: blur(10px);
--webkit-backdrop-filter: blur(10px);
-border: 1px solid rgba(255, 255, 255, 0.25);
-display: flex;
-align-items: center;
-justify-content: center;
-cursor: pointer;
-box-shadow: 0 6px 14px rgba(0, 0, 0, 0.6);
-transition: background 0.18s ease, transform 0.18s ease;
-color: white;
-}
-
-.action-btn:active,
-.flip-button:active {
-background: rgba(55, 55, 55, 0.8);
-transform: scale(0.92);
-}
-
-.action-btn svg {
-width: 25px;
-height: 25px;
-fill: none;
-stroke: white;
-stroke-width: 2;
-stroke-linecap: round;
-stroke-linejoin: round;
-}
-
-.action-btn.frozen {
-background: rgba(0, 122, 255, 0.9);
-border-color: rgba(255, 255, 255, 0.75);
-box-shadow: 0 0 16px rgba(0, 122, 255, 0.7);
-}
-
-#filterBtn.invert-mode {
-background: #fff;
-border-color: rgba(0, 0, 0, 0.25);
-}
-
-#torchBtn.torch-on {
-background: rgba(255, 190, 40, 0.95);
-border-color: rgba(255, 255, 255, 0.8);
-box-shadow: 0 0 16px rgba(255, 190, 40, 0.65);
-}
-
-#torchBtn.torch-on svg {
-stroke: #241800;
-}
-
-#filterBtn.invert-mode svg {
-stroke: #000;
-}
-
-#filterBtn svg { stroke: var(--filter-accent, white); }
-
-.flip-button {
-flex: 0 0 50px;
-z-index: 30;
-}
-
-.left-camera-controls {
-position: absolute;
-top: calc(max(24px, env(safe-area-inset-top)) + 60px);
-left: max(16px, env(safe-area-inset-left));
-display: flex;
-flex-direction: column;
-gap: 10px;
-z-index: 30;
-}
-
-#torchBtn[hidden],
-#rearCameraBtn[hidden],
-#rearCameraMenu[hidden] {
-display: none;
-}
-
-.rear-camera-menu {
-position: absolute;
-top: calc(max(24px, env(safe-area-inset-top)) + 60px);
-left: max(76px, calc(env(safe-area-inset-left) + 76px));
-min-width: 180px;
-max-width: min(260px, calc(100vw - 100px));
-padding: 6px;
-border: 1px solid rgba(255, 255, 255, 0.2);
-border-radius: 14px;
-background: rgba(15, 15, 15, 0.88);
-backdrop-filter: blur(12px);
--webkit-backdrop-filter: blur(12px);
-box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
-z-index: 35;
-}
-
-.rear-camera-option {
-width: 100%;
-padding: 11px 12px;
-border: 0;
-border-radius: 9px;
-background: transparent;
-color: #fff;
-text-align: left;
-font-size: 14px;
-cursor: pointer;
-}
-
-.rear-camera-option:active,
-.rear-camera-option.selected {
-background: rgba(255, 255, 255, 0.18);
-}
-
-body.frozen-mode .zoom-bar-container,
-body.frozen-mode #flipBtn,
-body.frozen-mode #rearCameraBtn,
-body.frozen-mode .zoom-readout,
-body.frozen-mode #torchBtn {
-display: none;
-}
-
-.flip-button svg {
-width: 28px;
-height: 28px;
-fill: none;
-stroke: white;
-stroke-width: 2.2;
-stroke-linecap: round;
-stroke-linejoin: round;
-}
-
-.zoom-bar-container {
-position: absolute;
-bottom: 30px;
-left: 24px;
-right: 24px;
-height: 56px;
-z-index: 40;
-}
-
-.slider-container {
-position: relative;
-width: 100%;
-height: 56px;
-cursor: pointer;
-}
-
-.slider-track {
-position: absolute;
-top: 26px;
-left: 0;
-right: 0;
-height: 28px;
-background: rgba(30, 30, 30, 0.8);
-border-radius: 3px;
-backdrop-filter: blur(10px);
--webkit-backdrop-filter: blur(10px);
-border: 1px solid rgba(255, 255, 255, 0.15);
-box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
-}
-
-.slider-fill {
-position: absolute;
-top: 26px;
-left: 0;
-width: 28px;
-height: 28px;
-border-radius: 3px;
-background: linear-gradient(90deg, #0ff, #00f);
-box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-pointer-events: none;
-z-index: 1;
-}
-
-.slider-thumb {
-position: absolute;
-top: 26px;
-left: 0;
-width: 28px;
-height: 28px;
-background: white;
-border-radius: 3px;
-box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-border: 2px solid rgba(255, 255, 255, 0.9);
-cursor: grab;
-touch-action: none;
-z-index: 50;
-transition: transform 0.1s ease;
-}
-
-.slider-thumb:active,
-.slider-thumb.grabbing {
-cursor: grabbing;
-transform: scale(1.15);
-box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
-}
-
-.toast-msg {
-position: fixed;
-inset: 0;
-display: flex;
-align-items: flex-end;
-justify-content: center;
-padding: 0 16px 180px;
-z-index: 100;
-pointer-events: auto;
-}
-
-.toast-msg-bubble {
-background: rgba(0, 0, 0, 0.75);
-backdrop-filter: blur(12px);
--webkit-backdrop-filter: blur(12px);
-color: white;
-padding: 10px 20px;
-border-radius: 40px;
-font-size: 14px;
-font-weight: 400;
-white-space: nowrap;
-transition: opacity 0.2s;
-border: 1px solid rgba(255, 255, 255, 0.2);
-cursor: pointer;
-}
-
+/* lens picker sheet */
+#lensMenu{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-end;justify-content:center;padding:0 0 calc(env(safe-area-inset-bottom,0px));background:rgba(0,0,0,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+#lensMenu[hidden]{display:none}
+#lensSheet{width:100%;max-width:520px;background:#141418;border:1px solid rgba(255,255,255,.1);border-radius:18px 18px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px));box-shadow:0 -20px 60px rgba(0,0,0,.6)}
+#lensSheet h2{margin:2px 6px 12px;font-size:14px;font-weight:600;letter-spacing:.02em;color:#d7d7dd}
+.lensItem{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:14px 12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);color:#fff;font-size:15px;font-family:inherit;cursor:pointer;margin-bottom:8px}
+.lensItem:active{background:rgba(255,255,255,.12)}
+.lensItem.sel{background:rgba(255,233,168,.14);border-color:rgba(255,233,168,.5)}
+.lensItem .dot{width:8px;height:8px;border-radius:50%;background:#6a6a72;flex:0 0 auto}
+.lensItem.sel .dot{background:#ffe9a8;box-shadow:0 0 10px rgba(255,225,140,.7)}
+.lensItem .meta{margin-left:auto;font-size:11px;color:#9a9aa2;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lensItem .lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%}
 </style>
 </head>
 <body>
 
-<div class="camera-container">
-<video id="video" autoplay playsinline muted></video>
+<div id="stage"><video id="cam" playsinline autoplay muted></video></div>
+
+<div id="hud">
+  <button id="lens" hidden aria-label="Choose camera">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/><path d="M4 8.5 6.5 6h11L20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-9Z"/></svg>
+  </button>
+  <button id="torch" hidden aria-label="Toggle flashlight">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4.6 13.5H11l-1 8.5 8.4-11.5H12l1-8.5Z"/></svg>
+  </button>
 </div>
 
-<div class="zoom-readout" id="zoomReadout" title="Reset zoom">1.0×</div>
-
-<div class="left-camera-controls">
-<button class="action-btn" id="torchBtn" type="button" aria-label="Turn flashlight on" title="Turn flashlight on" aria-pressed="false" hidden>
-<svg viewBox="0 0 24 24" aria-hidden="true">
-<path d="M9 3h6l1 5H8z" />
-<path d="M9 8h6v7l-1.5 2v4h-3v-4L9 15z" />
-<path d="M5 5 3.5 3.5M19 5l1.5-1.5M12 1V0" />
-</svg>
-</button>
-<button class="action-btn" id="rearCameraBtn" type="button" aria-label="Switch rear camera" title="Switch rear camera" hidden>
-<svg viewBox="0 0 24 24" aria-hidden="true">
-<rect x="3" y="6" width="18" height="14" rx="2" />
-<circle cx="12" cy="13" r="3" />
-<path d="M8 6l1.5-2h5L16 6" />
-</svg>
-</button>
-</div>
-<div class="rear-camera-menu" id="rearCameraMenu" role="listbox" aria-label="Rear cameras" hidden></div>
-
-<div class="right-actions">
-<div class="action-btn flip-button" id="flipBtn">
-<svg viewBox="0 0 24 24" aria-hidden="true">
-<path d="M2 8v8a4 4 0 0 0 4 4h6" />
-<path d="M22 16V8a4 4 0 0 0-4-4h-6" />
-<circle cx="12" cy="12" r="3" />
-<path d="M7 3 5 5l2 2" />
-<path d="M17 21l2-2-2-2" />
-</svg>
-</div>
-<div class="action-btn" id="filterBtn">
-<svg viewBox="0 0 24 24" aria-hidden="true">
-<circle cx="12" cy="12" r="9" />
-<path d="M12 3v18" />
-<g clip-path="url(#filterLines)">
-<path d="M12 6h6M12 9h8M12 12h9M12 15h8M12 18h6" />
-</g>
-<defs>
-<clipPath id="filterLines">
-<rect x="12" y="3" width="9" height="18" />
-</clipPath>
-</defs>
-</svg>
-</div>
-<div class="action-btn" id="photoBtn">
-<svg viewBox="0 0 24 24" aria-hidden="true">
-<path d="M12 3v12m0 0 5-5m-5 5-5-5" />
-<path d="M5 17v3h14v-3" />
-</svg>
-</div>
-<div class="action-btn" id="freezeBtn">
-<svg viewBox="0 0 24 24" aria-hidden="true">
-  <defs>
-    <g id="snowflake-arm">
-      <line x1="12" y1="12" x2="12" y2="2" />
-      <polyline points="8.5 4 12 6 15.5 4" />
-    </g>
-  </defs>
-  <use href="#snowflake-arm" />
-  <use href="#snowflake-arm" transform="rotate(60 12 12)" />
-  <use href="#snowflake-arm" transform="rotate(120 12 12)" />
-  <use href="#snowflake-arm" transform="rotate(180 12 12)" />
-  <use href="#snowflake-arm" transform="rotate(240 12 12)" />
-  <use href="#snowflake-arm" transform="rotate(300 12 12)" />
-</svg></div>
+<div id="ui">
+  <button id="minus" class="rbtn" aria-label="Zoom out">−</button>
+  <div id="pill"><span id="zoomVal">1.0</span><span class="x">×</span></div>
+  <button id="plus" class="rbtn" aria-label="Zoom in">+</button>
 </div>
 
-<div class="zoom-bar-container">
-<div class="slider-container" id="sliderContainer">
-<div class="slider-track"></div>
-<div class="slider-fill" id="sliderFill"></div>
-<div class="slider-thumb" id="sliderThumb"></div>
+<div id="lensMenu" hidden>
+  <div id="lensSheet" role="dialog" aria-label="Choose camera">
+    <h2>Camera</h2>
+    <div id="lensList"></div>
+  </div>
 </div>
-</div>
+
+<div id="error" hidden><div class="card"><h1>Camera unavailable</h1><p id="errorMsg"></p><button id="retry">Try again</button></div></div>
 
 <script>
-(function () {
-'use strict';
+(()=>{'use strict';
+const $=i=>document.getElementById(i),
+stage=$('stage'),cam=$('cam'),plus=$('plus'),minus=$('minus'),zoomEl=$('zoomVal'),
+torchBtn=$('torch'),errBox=$('error'),errMsg=$('errorMsg'),retry=$('retry'),
+lensBtn=$('lens'),lensMenu=$('lensMenu'),lensList=$('lensList');
 
-const video            = document.getElementById('video');
-const flipBtn          = document.getElementById('flipBtn');
-const sliderContainer  = document.getElementById('sliderContainer');
-const sliderThumb      = document.getElementById('sliderThumb');
-const sliderFill       = document.getElementById('sliderFill');
-const filterBtn        = document.getElementById('filterBtn');
-const photoBtn         = document.getElementById('photoBtn');
-const freezeBtn        = document.getElementById('freezeBtn');
-const zoomReadout      = document.getElementById('zoomReadout');
-const torchBtn          = document.getElementById('torchBtn');
-const rearCameraBtn     = document.getElementById('rearCameraBtn');
-const rearCameraMenu    = document.getElementById('rearCameraMenu');
-const MIN_ZOOM   = 1;
-const MAX_ZOOM   = 16;
-const THUMB_SIZE = 28;
-const LOG_MIN    = Math.log(MIN_ZOOM);
-const LOG_MAX    = Math.log(MAX_ZOOM);
-const LOG_RANGE  = LOG_MAX - LOG_MIN;
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-let currentStream = null;
-let facingMode    = 'environment';
-let rearCameras   = [];
-let selectedRearCameraId = null;
-let initToken     = 0;
-let currentZoom       = 1;
-let hwZoomRange       = null;
-let hwZoomRatio       = 1;
-let hwZoomUnsupported = false;
-let torchSupported = false;
-let torchOn = false;
-let isFrozen          = false;
-let hwRequestSeq = 0;
-let isDragging = false;
-let dragOffset = 0;
-let sliderRect = null;
-let lastDragEnd = 0;
-let toastTimer = null;
+const ZMIN=1,ZMAX=10,STEP=1.1,TAU=.085;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 
-const filters = [
-{ name: 'Original', value: 'none', accent: '#fff' },
-{ name: 'Gray', value: 'grayscale(1)', accent: '#666' },
-{ name: 'Invert', value: 'invert(1)', accent: '#fff' },
-{ name: 'Red', value: 'grayscale(1) sepia(1) saturate(5) hue-rotate(-42deg)', accent: '#f66' },
-{ name: 'Green', value: 'grayscale(1) sepia(1) saturate(5) hue-rotate(78deg)', accent: '#6f6' },
-{ name: 'Blue', value: 'grayscale(1) sepia(1) saturate(5) hue-rotate(198deg)', accent: '#66f' }
-];
+let zoom=1,target=1,anim=null,lastT=0,shown='',tx=0,ty=0;
+let stream=null,track=null,nativeMax=0,hw=1,torchOn=false;
+let currentDeviceId='';           // last-picked deviceId (or '' for default)
+const NATIVE_STEP = 0.01;
+const quantize = z => Math.round(z / NATIVE_STEP) * NATIVE_STEP;
 
-let filterIndex = 0;
-function showToast(message, duration) {
-duration = duration || 1500;
-if (toastTimer !== null) clearTimeout(toastTimer);
-const old = document.querySelector('.toast-msg');
-if (old) old.remove();
-const toast = document.createElement('div');
-toast.className = 'toast-msg';
-const bubble = document.createElement('div');
-bubble.className = 'toast-msg-bubble';
-bubble.textContent = message;
-toast.appendChild(bubble);
-toast.addEventListener('click', function (e) {
-e.preventDefault();
-e.stopPropagation();
-if (toastTimer !== null) clearTimeout(toastTimer);
-toast.remove();
-toastTimer = null;
-});
-document.body.appendChild(toast);
-toastTimer = setTimeout(function () {
-if (document.querySelector('.toast-msg') !== toast) return;
-bubble.style.opacity = '0';
-toastTimer = setTimeout(function () {
-if (toast.parentNode) toast.remove();
-toastTimer = null;
-}, 300);
-}, duration);
+/* ---------------- render ---------------- */
+function render(){
+  const cz=Math.max(1,zoom/hw),W=stage.clientWidth,H=stage.clientHeight;
+  const mx=Math.max(0,W*(cz-1)/2),my=Math.max(0,H*(cz-1)/2);
+  tx=clamp(tx,-mx,mx);ty=clamp(ty,-my,my);
+  cam.style.transform='translate3d('+tx.toFixed(2)+'px,'+ty.toFixed(2)+'px,0) scale('+cz.toFixed(4)+')';
+  const s=zoom.toFixed(1);
+  if(s!==shown){shown=s;zoomEl.textContent=s;}
+  minus.disabled=target<=ZMIN+1e-6;
+  plus.disabled=target>=ZMAX-1e-6;
+  if(nativeMax>0)pushNative(zoom);
 }
 
-function zoomToPercent(z) {
-return clamp(((Math.log(z) - LOG_MIN) / LOG_RANGE) * 100, 0, 100);
+/* ---------------- smooth zoom ---------------- */
+function frame(t){
+  const dt=Math.min(.06,Math.max(.001,(t-lastT)/1000));lastT=t;
+  zoom+=(target-zoom)*(1-Math.exp(-dt/TAU));
+  if(Math.abs(target-zoom)<4e-4){zoom=target;anim=null;render();return;}
+  render();anim=requestAnimationFrame(frame);
 }
-function percentToZoom(p) {
-return Math.exp(LOG_MIN + (clamp(p, 0, 100) / 100) * LOG_RANGE);
-}
+function animate(){if(anim===null){lastT=performance.now();anim=requestAnimationFrame(frame);}}
+function setZoom(z){target=clamp(z,ZMIN,ZMAX);animate();}
 
-function activeFilter() {
-return filters[filterIndex].value;
-}
-
-function setFilter(index, notify) {
-filterIndex = (index + filters.length) % filters.length;
-video.style.filter = activeFilter();
-filterBtn.classList.toggle('invert-mode', filterIndex === 2);
-filterBtn.style.setProperty('--filter-accent', filters[filterIndex].accent);
-if (notify !== false) showToast(filters[filterIndex].name + ' filter', 900);
-}
-
-function getVideoTrack() {
-return currentStream ? currentStream.getVideoTracks()[0] : null;
+/* ---------------- hardware zoom ---------------- */
+let pendN=null,busyN=false;
+function pushNative(z){
+  if(nativeMax<=0)return;
+  pendN=z;
+  if(busyN)return;
+  busyN=true;requestAnimationFrame(flushNative);
 }
 
-function updateTorchButtonVisibility() {
-torchBtn.hidden = facingMode !== 'environment' || !torchSupported;
+async function flushNative(){
+  while(pendN!==null){
+    const raw = Math.min(pendN, nativeMax);
+    pendN = null;
+    const t = quantize(raw);
+    if (t < 1) continue;
+    if (Math.abs(t - lastNative) < NATIVE_STEP/2) continue;
+    const adv = [{ zoom: t }];
+    if (torchOn) adv.push({ torch: true });
+    try {
+      await track.applyConstraints({ advanced: adv });
+      lastNative = t;
+      hw = t;
+    } catch (e) {
+      nativeMax = 0; busyN = false; render(); return;
+    }
+  }
+  busyN = false;
 }
 
-async function updateRearCameraList() {
-if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
-try {
-const devices = await navigator.mediaDevices.enumerateDevices();
-const cameras = devices.filter(function (device) {
-if (device.kind !== 'videoinput') return false;
-const label = device.label.toLowerCase();
-return !/front|user|selfie|facetime/.test(label) && /back|rear|environment|world/.test(label);
-});
-const track = getVideoTrack();
-const settings = track && track.getSettings ? track.getSettings() : null;
-if (settings && settings.deviceId && cameras.some(function (device) { return device.deviceId === settings.deviceId; })) {
-selectedRearCameraId = settings.deviceId;
-}
-rearCameras = cameras;
-rearCameraBtn.hidden = facingMode !== 'environment' || rearCameras.length < 2;
-if (rearCameraBtn.hidden) closeRearCameraMenu();
-renderRearCameraMenu();
-} catch (e) {
-rearCameraBtn.hidden = true;
-closeRearCameraMenu();
-}
+/* ---------------- torch ---------------- */
+async function toggleTorch(){
+  if(!track)return;
+  const next=!torchOn,adv=[];
+  if(nativeMax>0)adv.push({zoom:Math.min(zoom,nativeMax)});
+  adv.push({torch:next});
+  try{
+    await track.applyConstraints({advanced:adv});
+    torchOn=next;
+    if(nativeMax>0)hw=Math.min(zoom,nativeMax);
+  }catch(e){torchBtn.hidden=true;torchOn=false;}
+  torchBtn.classList.toggle('on',torchOn);
 }
 
-function renderRearCameraMenu() {
-rearCameraMenu.replaceChildren();
-rearCameras.forEach(function (device, index) {
-const option = document.createElement('button');
-option.type = 'button';
-option.className = 'rear-camera-option';
-option.setAttribute('role', 'option');
-option.setAttribute('aria-selected', String(device.deviceId === selectedRearCameraId));
-option.classList.toggle('selected', device.deviceId === selectedRearCameraId);
-option.textContent = device.label || ('Rear camera ' + (index + 1));
-option.addEventListener('click', function () { switchRearCamera(device.deviceId); });
-rearCameraMenu.appendChild(option);
-});
+/* ---------------- camera ---------------- */
+function showError(m){errMsg.textContent=m;errBox.hidden=false;}
+
+function stopStream(){
+  if(stream){stream.getTracks().forEach(t=>{try{t.stop()}catch(e){}});stream=null;}
+  try{cam.pause()}catch(e){}
+  cam.srcObject=null;
+  track=null;nativeMax=0;hw=1;torchOn=false;pendN=null;
+  torchBtn.hidden=true;torchBtn.classList.remove('on');
 }
 
-function closeRearCameraMenu() {
-rearCameraMenu.hidden = true;
-rearCameraBtn.setAttribute('aria-expanded', 'false');
+function readCaps(){
+  nativeMax=0;torchBtn.hidden=true;
+  if(!track||typeof track.getCapabilities!=='function')return;
+  let c;try{c=track.getCapabilities()}catch(e){return;}
+  const z=c.zoom;
+  if(z&&typeof z.max==='number'&&z.max>1.05&&(z.min==null||z.min<=1.001))nativeMax=z.max;
+  torchBtn.hidden=c.torch!==true;
 }
 
-function readTorchCapability() {
-torchSupported = false;
-torchOn = false;
-torchBtn.classList.remove('torch-on');
-torchBtn.setAttribute('aria-pressed', 'false');
-torchBtn.title = 'Turn flashlight on';
-torchBtn.setAttribute('aria-label', 'Turn flashlight on');
-const track = getVideoTrack();
-if (track && typeof track.getCapabilities === 'function') {
-try {
-torchSupported = !!(track.getCapabilities().torch === true);
-} catch (e) {}
-}
-updateTorchButtonVisibility();
-}
+async function startCamera(deviceId){
+  errBox.hidden=true;
+  stopStream();
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)
+    return showError('This browser cannot access the camera. Try Chrome, Safari or Firefox over HTTPS.');
 
-function toggleTorch() {
-const track = getVideoTrack();
-if (!torchSupported || !track || typeof track.applyConstraints !== 'function') {
-showToast('Flashlight unavailable on the active camera', 1200);
-return;
-}
-const nextState = !torchOn;
-track.applyConstraints({ advanced: [{ torch: nextState }] }).then(function () {
-torchOn = nextState;
-torchBtn.classList.toggle('torch-on', torchOn);
-torchBtn.setAttribute('aria-pressed', String(torchOn));
-const label = torchOn ? 'Turn flashlight off' : 'Turn flashlight on';
-torchBtn.title = label;
-torchBtn.setAttribute('aria-label', label);
-}).catch(function () {
-showToast('Flashlight unavailable', 1000);
-});
-}
+  const video = {
+    facingMode:{ideal:'environment'},
+    width:{ideal:3840},
+    height:{ideal:2160}
+  };
+  if(deviceId) video.deviceId = { exact: deviceId };
 
-function readZoomCapabilities() {
-hwZoomRange       = null;
-hwZoomRatio       = 1;
-hwZoomUnsupported = false;
-
-const track = getVideoTrack();
-if (!track || typeof track.getCapabilities !== 'function') return;
-
-let caps;
-try { caps = track.getCapabilities(); } catch (e) { return; }
-
-const z = caps && caps.zoom;
-if (z && isFinite(z.min) && isFinite(z.max) && z.max > z.min) {
-hwZoomRange = {
-min: z.min,
-max: z.max,
-step: (isFinite(z.step) && z.step > 0) ? z.step : 0
-};
-try {
-const s = track.getSettings();
-if (s && typeof s.zoom === 'number' && isFinite(s.zoom)) {
-hwZoomRatio = clamp(s.zoom / z.min, 1, z.max / z.min);
-}
-} catch (e) {}
-}
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video});
+    cam.srcObject=stream;
+    try{await cam.play()}catch(e){}
+    track=stream.getVideoTracks()[0]||null;
+    currentDeviceId = deviceId ||
+      (track && track.getSettings && track.getSettings().deviceId) || '';
+    readCaps();
+    // reset view when switching lens
+    zoom=target=1;hw=1;tx=ty=0;shown='';
+    render();
+    refreshLensButton();
+  }catch(err){
+    // if a specific deviceId failed, fall back to default rear
+    if(deviceId){
+      currentDeviceId='';
+      return startCamera('');
+    }
+    const n=err&&err.name;
+    if(n==='NotAllowedError'||n==='SecurityError')showError('Camera permission was denied. Allow camera access in your browser settings, then reload.');
+    else if(n==='NotFoundError'||n==='OverconstrainedError')showError('No camera was found on this device.');
+    else showError('Could not start the camera. '+((err&&err.message)||''));
+  }
 }
 
-function applyHardwareZoom(ratio) {
-const track = getVideoTrack();
-if (!track || !hwZoomRange) return Promise.resolve(true);
+/* ---------------- lens picker ---------------- */
+let lensOpen=false;
 
-const min  = hwZoomRange.min;
-const max  = hwZoomRange.max;
-
-const PRECISION_STEP = 0.01;
-
-let value = clamp(min * ratio, min, max);
-
-value = Math.round(value / PRECISION_STEP) * PRECISION_STEP;
-value = clamp(value, min, max);
-
-const deviceStep = hwZoomRange.step;
-
-const tryApply = (v) => track.applyConstraints({ advanced: [{ zoom: v }] });
-
-return tryApply(value)
-.then(() => true)
-.catch(() => {
-if (deviceStep > 0) {
-const snapped = min + Math.round((value - min) / deviceStep) * deviceStep;
-const snappedClamped = clamp(snapped, min, max);
-return tryApply(snappedClamped).then(() => true).catch(() => false);
-}
-return false;
-});
+function refreshLensButton(){
+  // Only show the picker if there's more than one rear camera.
+  if(!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices){
+    lensBtn.hidden=true;return;
+  }
+  navigator.mediaDevices.enumerateDevices().then(list=>{
+    const rear = list.filter(d=>d.kind==='videoinput' && /back|rear|environment/i.test(d.label||''))
+                     .concat(list.filter(d=>d.kind==='videoinput' && !/front|user|face/i.test(d.label||'') && !/back|rear|environment/i.test(d.label||'')));
+    // unique by deviceId
+    const seen=new Set,uniq=[];
+    for(const d of rear){ if(!seen.has(d.deviceId)){seen.add(d.deviceId);uniq.push(d);} }
+    lensBtn.hidden = uniq.length < 2;
+  }).catch(()=>{ lensBtn.hidden=true; });
 }
 
-function applyCssZoom(scale) {
-const mirror = facingMode === 'user' ? 'scaleX(-1) ' : '';
-const zoom = scale > 1.001 ? 'scale(' + scale + ')' : '';
-video.style.transform = mirror + zoom;
+async function openLensMenu(){
+  if(lensOpen) return;
+  lensOpen=true;
+  lensList.innerHTML='';
+  lensMenu.hidden=false;
+
+  let devices=[];
+  try{
+    devices = (await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+  }catch(e){ devices=[]; }
+
+  // Build the candidate list: rear/environment first, then anything else
+  const rear=[], other=[];
+  for(const d of devices){
+    const l=(d.label||'').toLowerCase();
+    if(/back|rear|environment/.test(l) || !/front|user|face/.test(l)) rear.push(d);
+    else other.push(d);
+  }
+  // dedupe by deviceId
+  const seen=new Set,list=[];
+  for(const d of rear.concat(other)){ if(!seen.has(d.deviceId)){seen.add(d.deviceId);list.push(d);} }
+
+  if(!list.length){
+    const p=document.createElement('p');
+    p.style.cssText='color:#9a9aa2;font-size:13px;padding:0 6px 8px;';
+    p.textContent='No cameras reported. Grant camera permission, then retry.';
+    lensList.appendChild(p);
+    return;
+  }
+
+  list.forEach(d=>{
+    const b=document.createElement('button');
+    b.className='lensItem'+(d.deviceId===currentDeviceId?' sel':'');
+    const dot=document.createElement('span');dot.className='dot';
+    const lbl=document.createElement('span');lbl.className='lbl';
+    const raw=(d.label||'').trim();
+    const isBack=/back|rear|environment/i.test(raw);
+    lbl.textContent = raw || (isBack?'Rear camera':'Camera');
+    const meta=document.createElement('span');meta.className='meta';
+    meta.textContent = isBack?'REAR':'OTHER';
+    b.appendChild(dot);b.appendChild(lbl);b.appendChild(meta);
+    b.addEventListener('click',()=>{
+      closeLensMenu();
+      startCamera(d.deviceId);
+    });
+    lensList.appendChild(b);
+  });
 }
 
-function updateZoomUI() {
-const percent = zoomToPercent(currentZoom);
-if (!sliderRect) sliderRect = sliderContainer.getBoundingClientRect();
-
-const travel = Math.max(1, sliderRect.width - THUMB_SIZE);
-const thumbX = (percent / 100) * travel;
-
-zoomReadout.textContent = (currentZoom < 10 ? (Math.floor(currentZoom * 10) / 10).toFixed(1) : Math.floor(currentZoom+0.01).toString()) + '×';
-sliderThumb.style.left = thumbX + 'px';
-sliderFill.style.width = (thumbX + THUMB_SIZE) + 'px';
+function closeLensMenu(){
+  lensOpen=false;
+  lensMenu.hidden=true;
 }
 
-function setZoom(zoom) {
-currentZoom = clamp(zoom, MIN_ZOOM, MAX_ZOOM);
+lensBtn.addEventListener('click',openLensMenu);
+lensMenu.addEventListener('click',e=>{ if(e.target===lensMenu) closeLensMenu(); });
+addEventListener('keydown',e=>{ if(e.key==='Escape'&&lensOpen) closeLensMenu(); });
 
-let targetRatio = 1;
-if (hwZoomRange && !hwZoomUnsupported) {
-const maxRatio = hwZoomRange.max / hwZoomRange.min;
-targetRatio = Math.min(currentZoom, maxRatio);
-}
-hwZoomRatio = targetRatio;
+/* ---------------- gestures ---------------- */
+const pts=new Map();
+let g=null,tap=null,lastTap=0;
 
-applyCssZoom(currentZoom / hwZoomRatio);
-updateZoomUI();
-
-if (hwZoomRange && !hwZoomUnsupported) {
-const seq = ++hwRequestSeq;
-applyHardwareZoom(targetRatio).then(function (ok) {
-if (ok || seq !== hwRequestSeq) return;
-hwZoomUnsupported = true;
-hwZoomRatio = 1;
-applyCssZoom(currentZoom);
-updateZoomUI();
-});
-}
+function begin(){
+  const a=[...pts.values()];
+  if(a.length===1)g={t:'pan',x:a[0].x,y:a[0].y,tx,ty};
+  else if(a.length>1){
+    const p=a[0],q=a[1];
+    g={t:'pinch',d:Math.hypot(p.x-q.x,p.y-q.y)||1,mx:(p.x+q.x)/2,my:(p.y+q.y)/2,z:target,tx,ty};
+  }else g=null;
 }
 
-function setZoomFromClientX(clientX) {
-if (!sliderRect) sliderRect = sliderContainer.getBoundingClientRect();
-const travel = Math.max(1, sliderRect.width - THUMB_SIZE);
-const x = clientX - sliderRect.left - THUMB_SIZE / 2;
-const percent = clamp((x / travel) * 100, 0, 100);
-setZoom(percentToZoom(percent));
-}
-
-function handleDragStart(e) {
-if (e.cancelable) e.preventDefault();
-e.stopPropagation();
-isDragging = true;
-sliderRect = sliderContainer.getBoundingClientRect();
-
-const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-const thumbLeft = parseFloat(sliderThumb.style.left) || 0;
-dragOffset = clientX - (sliderRect.left + thumbLeft + THUMB_SIZE / 2);
-sliderThumb.classList.add('grabbing');
-}
-
-function handleDragMove(e) {
-if (!isDragging) return;
-if (e.cancelable) e.preventDefault();
-e.stopPropagation();
-const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-setZoomFromClientX(clientX - dragOffset);
-}
-
-function handleDragEnd(e) {
-if (!isDragging) return;
-isDragging = false;
-lastDragEnd = Date.now();
-sliderThumb.classList.remove('grabbing');
-if (e && e.cancelable) e.preventDefault();
-}
-
-function capturePhoto() {
-if (!video.videoWidth || !video.videoHeight) {
-showToast('Camera not ready', 900);
-return;
-}
-
-const jsScale = Math.max(1, currentZoom / hwZoomRatio);
-const vw = video.videoWidth;
-const vh = video.videoHeight;
-const sw = vw / jsScale;
-const sh = vh / jsScale;
-const sx = (vw - sw) / 2;
-const sy = (vh - sh) / 2;
-
-const canvas = document.createElement('canvas');
-canvas.width  = vw;
-canvas.height = vh;
-const ctx = canvas.getContext('2d');
-if (!ctx) {
-showToast('Capture failed', 900);
-return;
-}
-ctx.filter = activeFilter();
-if (facingMode === 'user') {
-ctx.translate(canvas.width, 0);
-ctx.scale(-1, 1);
-}
-ctx.drawImage(video, sx, sy, sw, sh, 0, 0, vw, vh);
-
-canvas.toBlob(function (blob) {
-if (blob) {
-downloadBlob(blob, 'lens_photo_' + Date.now() + '.jpg');
-showToast('Photo saved', 1000);
-} else {
-showToast('Capture failed', 900);
-}
-}, 'image/jpeg', 0.92);
-}
-
-function downloadBlob(blob, filename) {
-const url = URL.createObjectURL(blob);
-const a = document.createElement('a');
-a.href = url;
-a.download = filename;
-document.body.appendChild(a);
-a.click();
-document.body.removeChild(a);
-setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-}
-
-function setFrozen(frozen) {
-isFrozen = frozen;
-document.body.classList.toggle('frozen-mode', isFrozen);
-freezeBtn.classList.toggle('frozen', isFrozen);
-if (isFrozen) {
-video.pause();
-showToast('Frame frozen', 900);
-} else {
-video.play().catch(function () {});
-showToast('Live preview', 900);
-}
-}
-
-function stopStream() {
-++hwRequestSeq;
-torchSupported = false;
-torchOn = false;
-torchBtn.hidden = true;
-torchBtn.classList.remove('torch-on');
-torchBtn.setAttribute('aria-pressed', 'false');
-torchBtn.title = 'Turn flashlight on';
-torchBtn.setAttribute('aria-label', 'Turn flashlight on');
-if (isFrozen) {
-isFrozen = false;
-document.body.classList.remove('frozen-mode');
-freezeBtn.classList.remove('frozen');
-}
-
-if (currentStream) {
-currentStream.getTracks().forEach(function (t) {
-try { t.stop(); } catch (e) {}
-});
-currentStream = null;
-}
-if (video.srcObject) video.srcObject = null;
-}
-
-function initCamera(useFacing, deviceId, selectedCameraLabel) {
-const token = ++initToken;
-stopStream();
-facingMode = useFacing;
-if (useFacing === 'environment' && deviceId) selectedRearCameraId = deviceId;
-updateTorchButtonVisibility();
-rearCameraBtn.hidden = true;
-
-if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-showToast('Camera not supported', 2000);
-return;
-}
-
-const base = { width: { ideal: 1920 }, height: { ideal: 1080 } };
-const attempts = deviceId ? [
-{ video: Object.assign({ deviceId: { exact: deviceId } }, base), audio: false }
-] : [
-{ video: Object.assign({ facingMode: { exact: facingMode } }, base), audio: false },
-{ video: Object.assign({ facingMode: { ideal: facingMode } }, base), audio: false },
-{ video: base, audio: false },
-{ video: true, audio: false }
-];
-
-(async function () {
-for (let i = 0; i < attempts.length; i++) {
-try {
-return await navigator.mediaDevices.getUserMedia(attempts[i]);
-} catch (e) {}
-}
-return null;
-})().then(function (stream) {
-if (token !== initToken) {
-if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
-return;
-}
-if (!stream) {
-showToast('Camera unavailable', 2000);
-return;
-}
-
-currentStream = stream;
-video.srcObject = stream;
-video.muted = true;
-video.setAttribute('webkit-playsinline', '');
-
-const onReady = function () {
-if (token !== initToken) return;
-video.play().catch(function () {});
-readZoomCapabilities();
-readTorchCapability();
-updateRearCameraList();
-sliderRect = null;
-setZoom(MIN_ZOOM);
-};
-
-if (video.readyState >= 1) onReady();
-else video.onloadedmetadata = onReady;
-});
-}
-
-function flipCamera() {
-initCamera(facingMode === 'environment' ? 'user' : 'environment');
-}
-
-function switchRearCamera(deviceId) {
-if (facingMode !== 'environment' || !deviceId) return;
-closeRearCameraMenu();
-if (deviceId === selectedRearCameraId) return;
-selectedRearCameraId = deviceId;
-initCamera('environment', deviceId);
-}
-
-function bindEvents() {
-sliderThumb.addEventListener('touchstart', handleDragStart, { passive: false });
-sliderThumb.addEventListener('touchmove',  handleDragMove,  { passive: false });
-sliderThumb.addEventListener('touchend',   handleDragEnd);
-sliderThumb.addEventListener('touchcancel', handleDragEnd);
-sliderThumb.addEventListener('mousedown',  handleDragStart);
-window.addEventListener('mousemove', handleDragMove);
-window.addEventListener('mouseup',   handleDragEnd);
-
-sliderContainer.addEventListener('click', function (e) {
-if (e.target === sliderThumb) return;
-if (Date.now() - lastDragEnd < 300) return;
-sliderRect = sliderContainer.getBoundingClientRect();
-setZoomFromClientX(e.clientX);
+stage.addEventListener('pointerdown',e=>{
+  try{stage.setPointerCapture(e.pointerId)}catch(_){}
+  pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  tap=pts.size===1?{x:e.clientX,y:e.clientY,t:Date.now(),m:false}:null;
+  begin();
 });
 
-window.addEventListener('resize', function () {
-sliderRect = null;
-updateZoomUI();
+stage.addEventListener('pointermove',e=>{
+  const p=pts.get(e.pointerId);if(!p)return;
+  p.x=e.clientX;p.y=e.clientY;
+  if(tap&&Math.hypot(e.clientX-tap.x,e.clientY-tap.y)>10)tap.m=true;
+  if(!g)return;
+  const a=[...pts.values()];
+  if(g.t==='pan'&&a.length===1){
+    tx=g.tx+a[0].x-g.x;ty=g.ty+a[0].y-g.y;render();
+  }else if(g.t==='pinch'&&a.length>1){
+    const p0=a[0],q=a[1];
+    const d=Math.hypot(p0.x-q.x,p0.y-q.y)||1;
+    setZoom(g.z*d/g.d);
+    tx=g.tx+(p0.x+q.x)/2-g.mx;
+    ty=g.ty+(p0.y+q.y)/2-g.my;
+  }
 });
 
-window.addEventListener('orientationchange', function () {
-setTimeout(function () { sliderRect = null; updateZoomUI(); }, 300);
-});
-
-zoomReadout.addEventListener('click', function () {
-if (currentZoom < 1.1) {setZoom(3);} else {setZoom(1);}
-});
-
-flipBtn.addEventListener('click', function (e) {
-e.preventDefault();
-flipCamera();
-});
-
-rearCameraBtn.addEventListener('click', function (e) {
-e.preventDefault();
-e.stopPropagation();
-if (rearCameras.length < 2) return;
-const shouldOpen = rearCameraMenu.hidden;
-if (shouldOpen) {
-renderRearCameraMenu();
-rearCameraMenu.hidden = false;
-rearCameraBtn.setAttribute('aria-expanded', 'true');
-} else {
-closeRearCameraMenu();
+function endPointer(e){
+  if(!pts.has(e.pointerId))return;
+  pts.delete(e.pointerId);
+  if(!pts.size){handleTap();tap=null;}
+  begin();
 }
-});
+stage.addEventListener('pointerup',endPointer);
+stage.addEventListener('pointercancel',e=>{tap=null;endPointer(e)});
 
-document.addEventListener('click', function (e) {
-if (!rearCameraMenu.contains(e.target) && e.target !== rearCameraBtn) closeRearCameraMenu();
-});
-
-photoBtn.addEventListener('click', function (e) {
-e.preventDefault();
-capturePhoto();
-});
-
-filterBtn.addEventListener('click', function (e) {
-e.preventDefault();
-setFilter(filterIndex + 1);
-});
-
-freezeBtn.addEventListener('click', function (e) {
-e.preventDefault();
-setFrozen(!isFrozen);
-});
-
-torchBtn.addEventListener('click', function (e) {
-e.preventDefault();
-toggleTorch();
-});
+function handleTap(){
+  if(!tap||tap.m||Date.now()-tap.t>320)return;
+  const now=Date.now();
+  if(now-lastTap<340){
+    lastTap=0;
+    setZoom(target>1.05?ZMIN:3);
+  }else lastTap=now;
 }
 
-function setupFullscreenAndStyle() {
-document.addEventListener('pointerdown', function () {
-const el = document.documentElement;
-if (el.requestFullscreen) el.requestFullscreen().catch(function () {});
-else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-}, { once: true });
-
-document.body.addEventListener('touchmove', function (e) {
-if (sliderContainer.contains(e.target)) return;
-if (e.cancelable) e.preventDefault();
-}, { passive: false });
-
-document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-
-document.addEventListener('visibilitychange', function () {
-if (document.visibilityState !== 'visible') return;
-if (isFrozen) setFrozen(false);
-const track = getVideoTrack();
-if (!track || track.readyState === 'ended' || track.muted) {
-initCamera(facingMode);
-} else {
-video.play().catch(function () {});
+/* ---------------- buttons ---------------- */
+function bindHold(el,fn){
+  let a=null,b=null;
+  const stop=()=>{clearTimeout(a);clearInterval(b);a=b=null;};
+  const tick=()=>{if(el.disabled){stop();return;}fn();};
+  el.addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    tick();
+    a=setTimeout(()=>{b=setInterval(tick,80)},380);
+  });
+  ['pointerup','pointerleave','pointercancel','blur'].forEach(ev=>el.addEventListener(ev,stop));
 }
-});
-}
+bindHold(plus,()=>setZoom(target*STEP));
+bindHold(minus,()=>setZoom(target/STEP));
 
-function wakeLock() {
-if (!('wakeLock' in navigator)) return;
-let lock = null;
+torchBtn.addEventListener('click',toggleTorch);
+retry.addEventListener('click',()=>startCamera(currentDeviceId||''));
+addEventListener('resize',render);
+addEventListener('orientationchange',()=>setTimeout(render,250));
+cam.addEventListener('loadedmetadata',render);
 
-const request = async function () {
-try {
-lock = await navigator.wakeLock.request('screen');
-lock.addEventListener('release', function () { lock = null; });
-} catch (e) {
-lock = null;
-}
-};
-
-request();
-document.addEventListener('visibilitychange', function () {
-if (document.visibilityState === 'visible' && !lock) request();
-});
-}
-
-setFilter(filterIndex, false);
-bindEvents();
-setupFullscreenAndStyle();
-wakeLock();
-initCamera('environment');
-
-window.addEventListener('load', function () {
-sliderRect = null;
-updateZoomUI();
-});
+render();
+startCamera('');
 })();
 </script>
 </body>
