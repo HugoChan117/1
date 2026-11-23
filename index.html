@@ -614,10 +614,6 @@ currentStream = null;
 if (video.srcObject) video.srcObject = null;
 }
 
-function isUltraWideCamera(label) {
-return /ultra[\s-]?wide|ultra.?wide|0[.,]5\s?x|0\.5\s?x/i.test(label || '');
-}
-
 function initCamera(useFacing) {
 const token = ++initToken;
 stopStream();
@@ -650,25 +646,23 @@ if (!stream || facingMode !== 'environment') return stream;
 try {
 const devices = await navigator.mediaDevices.enumerateDevices();
 const cameras = devices.filter(function (device) { return device.kind === 'videoinput'; });
-const ultraWide = cameras.filter(function (device) { return isUltraWideCamera(device.label); });
-if (!ultraWide.length) return stream;
+// Camera 0 is the preferred main 1x camera on devices that expose multiple lenses.
+const preferred = cameras[0];
+if (!preferred || !preferred.deviceId) return stream;
 
-const mainCameras = cameras.filter(function (device) { return !isUltraWideCamera(device.label); });
-if (!mainCameras.length) return stream;
-const preferred = mainCameras.find(function (device) {
-return /main|wide|standard|back camera|rear camera/i.test(device.label);
-}) || mainCameras[0];
-const activeId = stream.getVideoTracks()[0].getSettings().deviceId;
-if (!preferred.deviceId || preferred.deviceId === activeId) return stream;
+const activeTrack = stream.getVideoTracks()[0];
+const activeSettings = activeTrack && activeTrack.getSettings();
+if (activeSettings && activeSettings.deviceId === preferred.deviceId) return stream;
 
-stream.getTracks().forEach(function (track) { track.stop(); });
 try {
-return await navigator.mediaDevices.getUserMedia({
+const preferredStream = await navigator.mediaDevices.getUserMedia({
 video: Object.assign({ deviceId: { exact: preferred.deviceId } }, base),
 audio: false
 });
+stream.getTracks().forEach(function (track) { track.stop(); });
+return preferredStream;
 } catch (e) {
-return await acquireDefault();
+return stream;
 }
 } catch (e) {
 return stream;
