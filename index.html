@@ -330,8 +330,6 @@ const filterBtn        = document.getElementById('filterBtn');
 const photoBtn         = document.getElementById('photoBtn');
 const freezeBtn        = document.getElementById('freezeBtn');
 const zoomReadout      = document.getElementById('zoomReadout');
-
-// ---- UI zoom range stays 1.0x .. 16x; ultra-wide (sub-1x) not exposed ----
 const MIN_ZOOM   = 1;
 const MAX_ZOOM   = 16;
 const THUMB_SIZE = 28;
@@ -339,7 +337,6 @@ const LOG_MIN    = Math.log(MIN_ZOOM);
 const LOG_MAX    = Math.log(MAX_ZOOM);
 const LOG_RANGE  = LOG_MAX - LOG_MIN;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-
 let currentStream = null;
 let facingMode    = 'environment';
 let initToken     = 0;
@@ -401,7 +398,6 @@ function getVideoTrack() {
 return currentStream ? currentStream.getVideoTracks()[0] : null;
 }
 
-// ---- FIXED: baseline for HW zoom is "1.0 = main lens", not hwZoomRange.min ----
 function readZoomCapabilities() {
 hwZoomRange       = null;
 hwZoomRatio       = 1;
@@ -420,18 +416,16 @@ min: z.min,
 max: z.max,
 step: (isFinite(z.step) && z.step > 0) ? z.step : 0
 };
-const hwForOne = Math.max(1, z.min);   // HW value that corresponds to UI 1x
 try {
 const s = track.getSettings();
 if (s && typeof s.zoom === 'number' && isFinite(s.zoom)) {
-hwZoomRatio = clamp(s.zoom / hwForOne, z.min / hwForOne, z.max / hwForOne);
+hwZoomRatio = clamp(s.zoom / z.min, 1, z.max / z.min);
 }
 } catch (e) {}
 }
 }
 
-// ---- FIXED: takes an ABSOLUTE hardware zoom value (not a ratio of min) ----
-function applyHardwareZoom(hwValue) {
+function applyHardwareZoom(ratio) {
 const track = getVideoTrack();
 if (!track || !hwZoomRange) return Promise.resolve(true);
 
@@ -439,11 +433,14 @@ const min  = hwZoomRange.min;
 const max  = hwZoomRange.max;
 
 const PRECISION_STEP = 0.01;
-let value = clamp(hwValue, min, max);
+
+let value = clamp(min * ratio, min, max);
+
 value = Math.round(value / PRECISION_STEP) * PRECISION_STEP;
 value = clamp(value, min, max);
 
 const deviceStep = hwZoomRange.step;
+
 const tryApply = (v) => track.applyConstraints({ advanced: [{ zoom: v }] });
 
 return tryApply(value)
@@ -476,30 +473,22 @@ sliderThumb.style.left = thumbX + 'px';
 sliderFill.style.width = (thumbX + THUMB_SIZE) + 'px';
 }
 
-// ---- FIXED: UI 1.0x maps to HW 1.0x (main lens), not to HW min (ultra-wide) ----
 function setZoom(zoom) {
 currentZoom = clamp(zoom, MIN_ZOOM, MAX_ZOOM);
 
-let cssScale = currentZoom;
+let targetRatio = 1;
+if (hwZoomRange && !hwZoomUnsupported) {
+const maxRatio = hwZoomRange.max / hwZoomRange.min;
+targetRatio = Math.min(currentZoom, maxRatio);
+}
+hwZoomRatio = targetRatio;
+
+applyCssZoom(currentZoom / hwZoomRatio);
+updateZoomUI();
 
 if (hwZoomRange && !hwZoomUnsupported) {
-// HW zoom value that represents the main lens (UI 1.0x).
-// If the device exposes a 0.5x range (min ≈ 0.5), we skip it entirely
-// and pin the baseline to 1.0. Devices that already start at 1.0 are unchanged.
-const hwForOne = Math.max(1, hwZoomRange.min);
-const hwWanted = clamp(currentZoom * hwForOne, hwZoomRange.min, hwZoomRange.max);
-
-hwZoomRatio = clamp(
-hwWanted / hwForOne,
-hwZoomRange.min / hwForOne,
-hwZoomRange.max / hwForOne
-);
-
-// Only the leftover beyond hardware max is filled with CSS scale.
-cssScale = Math.max(1, currentZoom / hwZoomRatio);
-
 const seq = ++hwRequestSeq;
-applyHardwareZoom(hwWanted).then(function (ok) {
+applyHardwareZoom(targetRatio).then(function (ok) {
 if (ok || seq !== hwRequestSeq) return;
 hwZoomUnsupported = true;
 hwZoomRatio = 1;
@@ -507,9 +496,6 @@ applyCssZoom(currentZoom);
 updateZoomUI();
 });
 }
-
-applyCssZoom(cssScale);
-updateZoomUI();
 }
 
 function setZoomFromClientX(clientX) {
@@ -628,6 +614,10 @@ currentStream = null;
 if (video.srcObject) video.srcObject = null;
 }
 
+function isUltraWideCamera(label) {
+return /ultra[\s-]?wide|ultra.?wide|0[.,]5\s?x|0\.5\s?x/i.test(label || '');
+}
+
 function initCamera(useFacing) {
 const token = ++initToken;
 stopStream();
@@ -646,13 +636,43 @@ const attempts = [
 { video: true, audio: false }
 ];
 
-(async function () {
+const acquireDefault = async function () {
 for (let i = 0; i < attempts.length; i++) {
-try {
-return await navigator.mediaDevices.getUserMedia(attempts[i]);
-} catch (e) {}
+try { return await navigator.mediaDevices.getUserMedia(attempts[i]); } catch (e) {}
 }
 return null;
+};
+
+(async function () {
+let stream = await acquireDefault();
+if (!stream || facingMode !== 'environment') return stream;
+
+try {
+const devices = await navigator.mediaDevices.enumerateDevices();
+const cameras = devices.filter(function (device) { return device.kind === 'videoinput'; });
+const ultraWide = cameras.filter(function (device) { return isUltraWideCamera(device.label); });
+if (!ultraWide.length) return stream;
+
+const mainCameras = cameras.filter(function (device) { return !isUltraWideCamera(device.label); });
+if (!mainCameras.length) return stream;
+const preferred = mainCameras.find(function (device) {
+return /main|wide|standard|back camera|rear camera/i.test(device.label);
+}) || mainCameras[0];
+const activeId = stream.getVideoTracks()[0].getSettings().deviceId;
+if (!preferred.deviceId || preferred.deviceId === activeId) return stream;
+
+stream.getTracks().forEach(function (track) { track.stop(); });
+try {
+return await navigator.mediaDevices.getUserMedia({
+video: Object.assign({ deviceId: { exact: preferred.deviceId } }, base),
+audio: false
+});
+} catch (e) {
+return await acquireDefault();
+}
+} catch (e) {
+return stream;
+}
 })().then(function (stream) {
 if (token !== initToken) {
 if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
@@ -673,8 +693,6 @@ if (token !== initToken) return;
 video.play().catch(function () {});
 readZoomCapabilities();
 sliderRect = null;
-// Start on the MAIN lens (UI 1x). On 0.5x-capable devices this
-// forces hardware zoom to 1.0 instead of the default 0.5.
 setZoom(MIN_ZOOM);
 };
 
