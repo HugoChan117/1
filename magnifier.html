@@ -23,6 +23,7 @@ html,body{margin:0;height:100%;background:#000;color:#fff;overflow:hidden;font-f
 .rbtn:disabled{opacity:.3;pointer-events:none}
 #pill{display:flex;align-items:baseline;gap:2px;padding:9px 20px;border-radius:999px;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.02em;background:rgba(20,20,24,.62);border:1px solid rgba(255,255,255,.14);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 #pill .x{font-size:12px;font-weight:500;opacity:.6}
+#pill .tag{font-size:10px;font-weight:500;opacity:.55;margin-left:6px;letter-spacing:.04em}
 #error{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:24px;text-align:center;background:rgba(0,0,0,.9)}
 #error[hidden]{display:none}
 #error .card{max-width:340px}
@@ -44,7 +45,7 @@ html,body{margin:0;height:100%;background:#000;color:#fff;overflow:hidden;font-f
 
 <div id="ui">
   <button id="minus" class="rbtn" aria-label="Zoom out">−</button>
-  <div id="pill"><span id="zoomVal">1.0</span><span class="x">×</span></div>
+  <div id="pill"><span id="zoomVal">1.0</span><span class="x">×</span><span id="zoomTag" class="tag"></span></div>
   <button id="plus" class="rbtn" aria-label="Zoom in">+</button>
 </div>
 
@@ -53,27 +54,35 @@ html,body{margin:0;height:100%;background:#000;color:#fff;overflow:hidden;font-f
 <script>
 (()=>{'use strict';
 const $=i=>document.getElementById(i),
-stage=$('stage'),cam=$('cam'),plus=$('plus'),minus=$('minus'),zoomEl=$('zoomVal'),
+stage=$('stage'),cam=$('cam'),plus=$('plus'),minus=$('minus'),zoomEl=$('zoomVal'),zoomTag=$('zoomTag'),
 torchBtn=$('torch'),errBox=$('error'),errMsg=$('errorMsg'),retry=$('retry');
 
-const ZMIN=1,ZMAX=10,STEP=1.1,TAU=.085;
+const ZMIN=1, ZMAX_HW=10, ZMAX_DIGITAL=4, STEP=1.1, TAU=.085;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 
 let zoom=1,target=1,anim=null,lastT=0,shown='',tx=0,ty=0;
-let stream=null,track=null,nativeMax=0,hw=1,torchOn=false;
+let stream=null,track=null,hw=1,torchOn=false;
+
+/* hardware zoom range, captured from capabilities */
+let nativeMin=1, nativeMax=0;
+let lastNative=1;
+
 const NATIVE_STEP = 0.01;
 const quantize = z => Math.round(z / NATIVE_STEP) * NATIVE_STEP;
 
 /* ---------------- render ---------------- */
 function render(){
-  const cz=Math.max(1,zoom/hw),W=stage.clientWidth,H=stage.clientHeight;
+  const zMax = nativeMax>0 ? ZMAX_HW : ZMAX_DIGITAL;
+  // effective CSS crop = requested zoom / what the hardware already applied
+  const cz=Math.max(1, zoom/Math.max(1,hw)),W=stage.clientWidth,H=stage.clientHeight;
   const mx=Math.max(0,W*(cz-1)/2),my=Math.max(0,H*(cz-1)/2);
   tx=clamp(tx,-mx,mx);ty=clamp(ty,-my,my);
   cam.style.transform='translate3d('+tx.toFixed(2)+'px,'+ty.toFixed(2)+'px,0) scale('+cz.toFixed(4)+')';
   const s=zoom.toFixed(1);
   if(s!==shown){shown=s;zoomEl.textContent=s;}
+  zoomTag.textContent = nativeMax>0 ? 'OPT' : 'DIG';
   minus.disabled=target<=ZMIN+1e-6;
-  plus.disabled=target>=ZMAX-1e-6;
+  plus.disabled=target>=zMax-1e-6;
   if(nativeMax>0)pushNative(zoom);
 }
 
@@ -85,7 +94,11 @@ function frame(t){
   render();anim=requestAnimationFrame(frame);
 }
 function animate(){if(anim===null){lastT=performance.now();anim=requestAnimationFrame(frame);}}
-function setZoom(z){target=clamp(z,ZMIN,ZMAX);animate();}
+function setZoom(z){
+  const zMax = nativeMax>0 ? ZMAX_HW : ZMAX_DIGITAL;
+  target=clamp(z,ZMIN,zMax);
+  animate();
+}
 
 /* ---------------- hardware zoom ---------------- */
 let pendN=null,busyN=false;
@@ -98,10 +111,10 @@ function pushNative(z){
 
 async function flushNative(){
   while(pendN!==null){
-    const raw = Math.min(pendN, nativeMax);
+    const raw = clamp(pendN, nativeMin, nativeMax);
     pendN = null;
     const t = quantize(raw);
-    if (t < 1) continue;
+    if (t < nativeMin) continue;
     if (Math.abs(t - lastNative) < NATIVE_STEP/2) continue;
     const adv = [{ zoom: t }];
     if (torchOn) adv.push({ torch: true });
@@ -120,12 +133,12 @@ async function flushNative(){
 async function toggleTorch(){
   if(!track)return;
   const next=!torchOn,adv=[];
-  if(nativeMax>0)adv.push({zoom:Math.min(zoom,nativeMax)});
+  if(nativeMax>0)adv.push({zoom:clamp(zoom,nativeMin,nativeMax)});
   adv.push({torch:next});
   try{
     await track.applyConstraints({advanced:adv});
     torchOn=next;
-    if(nativeMax>0)hw=Math.min(zoom,nativeMax);
+    if(nativeMax>0)hw=clamp(zoom,nativeMin,nativeMax);
   }catch(e){torchBtn.hidden=true;torchOn=false;}
   torchBtn.classList.toggle('on',torchOn);
 }
@@ -137,16 +150,70 @@ function stopStream(){
   if(stream){stream.getTracks().forEach(t=>{try{t.stop()}catch(e){}});stream=null;}
   try{cam.pause()}catch(e){}
   cam.srcObject=null;
-  track=null;nativeMax=0;hw=1;torchOn=false;pendN=null;
+  track=null;nativeMin=1;nativeMax=0;hw=1;torchOn=false;pendN=null;lastNative=1;
   torchBtn.hidden=true;torchBtn.classList.remove('on');
 }
 
+/* Pick the main (wide) rear camera.
+   Heuristic: among rear cameras, reject ones whose zoom capability starts < 0.95
+   (that's the ultra-wide / logical-UW anchor), and prefer labels mentioning
+   back/rear/main. Falls back to any rear, then any camera. */
+async function pickMainRearCamera(){
+  let devices=[];
+  try{
+    devices = (await navigator.mediaDevices.enumerateDevices())
+      .filter(d=>d.kind==='videoinput');
+  }catch(e){ return null; }
+
+  if(!devices.length) return null;
+
+  // We can only read capabilities after a track exists, so probe each device
+  // with a very short-lived getUserMedia call. Stop each track immediately.
+  const scored=[];
+  for(const d of devices){
+    let t=null;
+    try{
+      const s=await navigator.mediaDevices.getUserMedia({
+        audio:false,
+        video:{ deviceId:{exact:d.deviceId} }
+      });
+      t=s.getVideoTracks()[0]||null;
+      if(!t){ continue; }
+      let caps={}; try{ caps=t.getCapabilities?t.getCapabilities():{}; }catch(e){}
+      const facing = (caps.facingMode||[]).includes?.('environment')
+                   || /back|rear|environment/i.test(d.label||'')
+                   || /back|rear|environment/i.test((t.getSettings?.().facingMode)||'');
+      const z = caps.zoom;
+      const isUW = z && typeof z.min==='number' && z.min < 0.95;
+      let score=0;
+      if(facing) score += 4;
+      if(!isUW)  score += 3;                 // main lens likely
+      if(/back|rear|main|wide/i.test(d.label||'')) score += 2;
+      if(/ultra|uw|0\.5|wide angle/i.test(d.label||'')) score -= 4;
+      scored.push({ d, score });
+    }catch(e){ /* ignore device */ }
+    finally{
+      if(t){ try{t.stop()}catch(e){} }
+    }
+  }
+  if(!scored.length) return null;
+  scored.sort((a,b)=>b.score-a.score);
+  return scored[0].d.deviceId;
+}
+
 function readCaps(){
-  nativeMax=0;torchBtn.hidden=true;
+  nativeMin=1; nativeMax=0; torchBtn.hidden=true;
   if(!track||typeof track.getCapabilities!=='function')return;
   let c;try{c=track.getCapabilities()}catch(e){return;}
   const z=c.zoom;
-  if(z&&typeof z.max==='number'&&z.max>1.05&&(z.min==null||z.min<=1.001))nativeMax=z.max;
+  // IMPORTANT: accept zoom ranges whose min is < 1 (ultra-wide-anchored logical
+  // cameras). The old guard (z.min<=1.001) silently disabled HW zoom there.
+  if(z && typeof z.max==='number' && z.max>1.05){
+    nativeMin = (typeof z.min==='number') ? z.min : 1;
+    nativeMax = z.max;
+    // Start the hardware at the requested min (1x in our UI = nativeMin here).
+    lastNative = nativeMin;
+  }
   torchBtn.hidden=c.torch!==true;
 }
 
@@ -156,11 +223,28 @@ async function startCamera(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)
     return showError('This browser cannot access the camera. Try Chrome, Safari or Firefox over HTTPS.');
   try{
-    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160}}});
+    // 1) choose the main rear lens explicitly (avoids the 4K->UW enumeration bias)
+    const deviceId = await pickMainRearCamera();
+
+    // 2) 1080p ideal, 720p floor. HW zoom recovers sharpness; the source stays
+    //    moderate so the browser doesn't prefer the ultra-wide sensor.
+    const video = {
+      facingMode:{ideal:'environment'},
+      width:{ideal:1920, min:1280},
+      height:{ideal:1080, min:720}
+    };
+    if(deviceId) video.deviceId = { exact: deviceId };
+
+    stream = await navigator.mediaDevices.getUserMedia({ audio:false, video });
     cam.srcObject=stream;
     try{await cam.play()}catch(e){}
     track=stream.getVideoTracks()[0]||null;
-    readCaps();render();
+    readCaps();
+
+    // 3) If the pinned device didn't give us the main lens (no zoom caps at all),
+    //    try one more time without deviceId as a graceful fallback.
+    if(!track){ throw new Error('No video track'); }
+    render();
   }catch(err){
     const n=err&&err.name;
     if(n==='NotAllowedError'||n==='SecurityError')showError('Camera permission was denied. Allow camera access in your browser settings, then reload.');
