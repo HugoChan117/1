@@ -2,467 +2,251 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#000000">
 <title>Magnifier · 1–10×</title>
 <style>
-  :root{
-    --safe-t: env(safe-area-inset-top, 0px);
-    --safe-b: env(safe-area-inset-bottom, 0px);
-    --safe-l: env(safe-area-inset-left, 0px);
-    --safe-r: env(safe-area-inset-right, 0px);
-  }
-  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html,body{
-    margin:0; height:100%; background:#000; color:#fff; overflow:hidden;
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    -webkit-user-select:none; user-select:none; overscroll-behavior:none; touch-action:none;
-  }
-
-  /* ---------- camera stage ---------- */
-  #stage{ position:fixed; inset:0; overflow:hidden; background:#000; touch-action:none; }
-  #cam{
-    position:absolute; top:0; left:0; width:100%; height:100%;
-    object-fit:cover; object-position:center;
-    transform-origin:50% 50%;
-    will-change:transform;
-    background:#0a0a0a;
-  }
-
-  /* ---------- top HUD ---------- */
-  #hud{
-    position:fixed; top:0; left:0; right:0; z-index:10;
-    display:flex; align-items:flex-start; justify-content:space-between;
-    padding: calc(12px + var(--safe-t)) calc(14px + var(--safe-r)) 12px calc(14px + var(--safe-l));
-    pointer-events:none;
-  }
-  #hud > *{ pointer-events:auto; }
-
-  #badge{
-    display:flex; align-items:baseline; gap:2px;
-    padding:8px 16px; border-radius:999px;
-    background:rgba(20,20,24,.62);
-    border:1px solid rgba(255,255,255,.14);
-    -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
-    font-size:17px; font-weight:600; font-variant-numeric:tabular-nums; letter-spacing:.02em;
-  }
-  #badge .x{ font-size:12px; font-weight:500; opacity:.6; }
-
-  .icon-btn{
-    width:46px; height:46px; padding:0; border-radius:50%;
-    display:grid; place-items:center; cursor:pointer; color:#fff;
-    background:rgba(20,20,24,.62);
-    border:1px solid rgba(255,255,255,.14);
-    -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
-    transition: background .15s, color .15s, border-color .15s, transform .08s;
-  }
-  .icon-btn:active{ transform:scale(.92); }
-  .icon-btn.on{ background:#fff; color:#000; border-color:#fff; }
-  .icon-btn svg{ width:22px; height:22px; display:block; }
-  .icon-btn[hidden]{ display:none; }
-
-  /* ---------- bottom controls ---------- */
-  #ui{
-    position:fixed; left:0; right:0; bottom:0; z-index:10;
-    display:flex; align-items:center; gap:14px;
-    padding: 40px calc(16px + var(--safe-r)) calc(16px + var(--safe-b)) calc(16px + var(--safe-l));
-    background:linear-gradient(to top,
-      rgba(0,0,0,.86) 0%, rgba(0,0,0,.55) 45%, rgba(0,0,0,0) 100%);
-  }
-
-  .rbtn{
-    flex:0 0 auto; width:58px; height:58px; padding:0; border-radius:50%;
-    display:grid; place-items:center; cursor:pointer;
-    color:#fff; font-size:26px; font-weight:500; line-height:1;
-    background:rgba(255,255,255,.10);
-    border:1px solid rgba(255,255,255,.16);
-    -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
-    transition: transform .08s, background .15s, opacity .15s;
-    touch-action:manipulation;
-  }
-  .rbtn:active{ transform:scale(.9); background:rgba(255,255,255,.22); }
-  .rbtn:disabled{ opacity:.3; pointer-events:none; }
-
-  .slider-wrap{ flex:1 1 auto; min-width:0; }
-
-  #slider{
-    -webkit-appearance:none; appearance:none;
-    display:block; width:100%; height:44px; margin:0;
-    background:transparent; cursor:pointer;
-  }
-  #slider::-webkit-slider-runnable-track{
-    height:8px; border-radius:99px;
-    background:linear-gradient(90deg, rgba(255,255,255,.16), rgba(255,255,255,.38));
-  }
-  #slider::-webkit-slider-thumb{
-    -webkit-appearance:none; appearance:none;
-    width:28px; height:28px; margin-top:-10px; border:none; border-radius:50%;
-    background:#fff; box-shadow:0 2px 10px rgba(0,0,0,.6);
-  }
-  #slider::-moz-range-track{
-    height:8px; border-radius:99px; background:rgba(255,255,255,.28);
-  }
-  #slider::-moz-range-thumb{
-    width:28px; height:28px; border:none; border-radius:50%;
-    background:#fff; box-shadow:0 2px 10px rgba(0,0,0,.6);
-  }
-  #slider:focus-visible{ outline:none; }
-  #slider:focus-visible::-webkit-slider-thumb{ box-shadow:0 0 0 4px rgba(255,255,255,.35); }
-
-  /* ---------- error overlay ---------- */
-  #error{
-    position:fixed; inset:0; z-index:50; display:grid; place-items:center;
-    padding:24px; text-align:center; background:rgba(0,0,0,.9);
-  }
-  #error[hidden]{ display:none; }
-  #error .card{ max-width:340px; }
-  #error h1{ font-size:19px; font-weight:600; margin:0 0 10px; }
-  #error p{ font-size:14px; line-height:1.5; color:#b9b9c0; margin:0 0 20px; }
-  #retry{
-    padding:12px 26px; border-radius:999px; border:none; cursor:pointer;
-    background:#fff; color:#000; font-size:15px; font-weight:600;
-    font-family:inherit;
-  }
-  #retry:active{ transform:scale(.96); }
+:root{--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);--sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#000;color:#fff;overflow:hidden;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none;overscroll-behavior:none;touch-action:none}
+#stage{position:fixed;inset:0;overflow:hidden;background:#000;touch-action:none}
+#cam{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;object-position:center;transform-origin:50% 50%;will-change:transform;background:#0a0a0a}
+#hud{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;justify-content:flex-end;padding:calc(12px + var(--st)) calc(14px + var(--sr)) 12px calc(14px + var(--sl));pointer-events:none}
+#torch{pointer-events:auto;width:46px;height:46px;padding:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#fff;background:rgba(20,20,24,.62);border:1px solid rgba(255,255,255,.14);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);transition:background .18s,color .18s,transform .08s}
+#torch[hidden]{display:none}
+#torch.on{background:#ffe9a8;color:#2a1f00;border-color:#ffe9a8;box-shadow:0 0 22px rgba(255,225,140,.55)}
+#torch:active{transform:scale(.92)}
+#torch svg{width:22px;height:22px;display:block}
+#ui{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:44px calc(20px + var(--sr)) calc(20px + var(--sb)) calc(20px + var(--sl));background:linear-gradient(to top,rgba(0,0,0,.86),rgba(0,0,0,.5) 45%,rgba(0,0,0,0))}
+.rbtn{flex:0 0 auto;width:64px;height:64px;padding:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;color:#fff;font-size:30px;font-weight:400;line-height:1;font-family:inherit;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:transform .08s,background .15s,opacity .15s;touch-action:manipulation}
+.rbtn:active{transform:scale(.9);background:rgba(255,255,255,.22)}
+.rbtn:disabled{opacity:.3;pointer-events:none}
+#pill{display:flex;align-items:baseline;gap:2px;padding:9px 20px;border-radius:999px;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.02em;background:rgba(20,20,24,.62);border:1px solid rgba(255,255,255,.14);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+#pill .x{font-size:12px;font-weight:500;opacity:.6}
+#error{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:24px;text-align:center;background:rgba(0,0,0,.9)}
+#error[hidden]{display:none}
+#error .card{max-width:340px}
+#error h1{font-size:19px;font-weight:600;margin:0 0 10px}
+#error p{font-size:14px;line-height:1.5;color:#b9b9c0;margin:0 0 20px}
+#retry{padding:12px 26px;border-radius:999px;border:none;cursor:pointer;background:#fff;color:#000;font-size:15px;font-weight:600;font-family:inherit}
+#retry:active{transform:scale(.96)}
 </style>
 </head>
 <body>
 
-<div id="stage">
-  <video id="cam" playsinline autoplay muted></video>
-</div>
+<div id="stage"><video id="cam" playsinline autoplay muted></video></div>
 
 <div id="hud">
-  <button id="torchBtn" class="icon-btn" hidden aria-label="Toggle light">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-         stroke-linecap="round" stroke-linejoin="round">
-      <path d="M13 2 4.6 13.5H11l-1 8.5 8.4-11.5H12l1-8.5Z"/>
-    </svg>
+  <button id="torch" hidden aria-label="Toggle flashlight">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4.6 13.5H11l-1 8.5 8.4-11.5H12l1-8.5Z"/></svg>
   </button>
-  <div id="badge"><span id="zoomVal">1.0</span><span class="x">×</span></div>
 </div>
 
 <div id="ui">
   <button id="minus" class="rbtn" aria-label="Zoom out">−</button>
-  <div class="slider-wrap">
-    <input id="slider" type="range" min="0" max="1" step="0.001" value="0" aria-label="Zoom level">
-  </div>
+  <div id="pill"><span id="zoomVal">1.0</span><span class="x">×</span></div>
   <button id="plus" class="rbtn" aria-label="Zoom in">+</button>
 </div>
 
-<div id="error" hidden>
-  <div class="card">
-    <h1>Camera unavailable</h1>
-    <p id="errorMsg"></p>
-    <button id="retry">Try again</button>
-  </div>
-</div>
+<div id="error" hidden><div class="card"><h1>Camera unavailable</h1><p id="errorMsg"></p><button id="retry">Try again</button></div></div>
 
 <script>
-(() => {
-  'use strict';
+(()=>{'use strict';
+const $=i=>document.getElementById(i),
+stage=$('stage'),cam=$('cam'),plus=$('plus'),minus=$('minus'),zoomEl=$('zoomVal'),
+torchBtn=$('torch'),errBox=$('error'),errMsg=$('errorMsg'),retry=$('retry');
 
-  const stage    = document.getElementById('stage');
-  const cam      = document.getElementById('cam');
-  const slider   = document.getElementById('slider');
-  const btnPlus  = document.getElementById('plus');
-  const btnMinus = document.getElementById('minus');
-  const zoomVal  = document.getElementById('zoomVal');
-  const btnTorch = document.getElementById('torchBtn');
-  const errBox   = document.getElementById('error');
-  const errMsg   = document.getElementById('errorMsg');
-  const btnRetry = document.getElementById('retry');
+const ZMIN=1,ZMAX=10,STEP=1.1,TAU=.085;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 
-  /* =========================================================
-     EXPONENTIAL ZOOM MAPPING
-     slider t ∈ [0,1]  →  zoom = ZMIN · (ZMAX/ZMIN)^t
-     so 10% of travel ≈ 26% more magnification, every step.
-     ========================================================= */
-  const ZMIN = 1;
-  const ZMAX = 10;
-  const LN_RANGE = Math.log(ZMAX / ZMIN);   // = ln(10)
+let zoom=1,target=1,anim=null,lastT=0,shown='',tx=0,ty=0;
+let stream=null,track=null,nativeMax=0,hw=1,torchOn=false;
+const NATIVE_STEP = 0.01;
+const quantize = z => Math.round(z / NATIVE_STEP) * NATIVE_STEP;
 
-  const STEP = 1.25;                        // multiplicative step per button press
+/* ---------------- render ---------------- */
+function render(){
+  const cz=Math.max(1,zoom/hw),W=stage.clientWidth,H=stage.clientHeight;
+  const mx=Math.max(0,W*(cz-1)/2),my=Math.max(0,H*(cz-1)/2);
+  tx=clamp(tx,-mx,mx);ty=clamp(ty,-my,my);
+  cam.style.transform='translate3d('+tx.toFixed(2)+'px,'+ty.toFixed(2)+'px,0) scale('+cz.toFixed(4)+')';
+  const s=zoom.toFixed(1);
+  if(s!==shown){shown=s;zoomEl.textContent=s;}
+  minus.disabled=target<=ZMIN+1e-6;
+  plus.disabled=target>=ZMAX-1e-6;
+  if(nativeMax>0)pushNative(zoom);
+}
 
-  const sliderToZoom = t => ZMIN * Math.exp(LN_RANGE * t);
-  const zoomToSlider = z => Math.log(z / ZMIN) / LN_RANGE;
+/* ---------------- smooth zoom ---------------- */
+function frame(t){
+  const dt=Math.min(.06,Math.max(.001,(t-lastT)/1000));lastT=t;
+  zoom+=(target-zoom)*(1-Math.exp(-dt/TAU));
+  if(Math.abs(target-zoom)<4e-4){zoom=target;anim=null;render();return;}
+  render();anim=requestAnimationFrame(frame);
+}
+function animate(){if(anim===null){lastT=performance.now();anim=requestAnimationFrame(frame);}}
+function setZoom(z){target=clamp(z,ZMIN,ZMAX);animate();}
 
-  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+/* ---------------- hardware zoom ---------------- */
+let pendN=null,busyN=false;
+function pushNative(z){
+  if(nativeMax<=0)return;
+  pendN=z;
+  if(busyN)return;
+  busyN=true;requestAnimationFrame(flushNative);
+}
 
-  let zoom = 1;          // current magnification
-  let tx = 0, ty = 0;    // pan offset (css px)
-
-  let track = null;
-  let nativeRange = null;  // {min,max} hardware zoom if available
-  let torchOn = false;
-
-  /* ---------------------------------------------------------
-     Rendering
-     Hardware zoom is used while it lasts; anything beyond its
-     maximum is finished off with a CSS scale (and panning).
-     --------------------------------------------------------- */
-  function nativeFor(z){ return nativeRange ? Math.min(z, nativeRange.max) : 1; }
-  function cssFor(z){ return nativeRange ? z / nativeFor(z) : z; }
-
-  function render(){
-    const cssZ = cssFor(zoom);
-
-    // clamp pan to the available overflow
-    const W = stage.clientWidth;
-    const H = stage.clientHeight;
-    const maxX = Math.max(0, (W * cssZ - W) / 2);
-    const maxY = Math.max(0, (H * cssZ - H) / 2);
-    tx = clamp(tx, -maxX, maxX);
-    ty = clamp(ty, -maxY, maxY);
-
-    cam.style.transform =
-      `translate3d(${tx.toFixed(2)}px, ${ty.toFixed(2)}px, 0) scale(${cssZ.toFixed(4)})`;
-
-    zoomVal.textContent = zoom.toFixed(1);
-    btnMinus.disabled = zoom <= ZMIN + 1e-6;
-    btnPlus.disabled  = zoom >= ZMAX - 1e-6;
-
-    // keep the slider in sync without fighting the user's finger
-    const sv = zoomToSlider(zoom);
-    if (Math.abs(parseFloat(slider.value) - sv) > 0.0005) slider.value = String(sv);
-
-    if (nativeRange) pushNative(zoom);
-  }
-
-  function setZoom(z){
-    zoom = clamp(z, ZMIN, ZMAX);
-    render();
-  }
-
-  /* ---------------------------------------------------------
-     Hardware (optical/digital) zoom via constraints — throttled
-     --------------------------------------------------------- */
-  let nativePending = null;
-  let nativeBusy = false;
-  let lastNativeSent = -1;
-
-  function pushNative(z){
-    if (!nativeRange) return;
-    nativePending = z;
-    if (nativeBusy) return;
-    nativeBusy = true;
-    requestAnimationFrame(flushNative);
-  }
-
-  async function flushNative(){
-    while (nativePending !== null){
-      const target = Math.min(nativePending, nativeRange.max);
-      nativePending = null;
-      if (Math.abs(target - lastNativeSent) < 0.02) continue;
-      lastNativeSent = target;
-      try {
-        await track.applyConstraints({ advanced: [{ zoom: target }] });
-      } catch (err) {
-        // camera lied about supporting zoom → fall back to CSS scaling
-        nativeRange = null;
-        nativePending = null;
-        lastNativeSent = -1;
-        render();
-        break;
-      }
-    }
-    nativeBusy = false;
-  }
-
-  /* ---------------------------------------------------------
-     Camera
-     --------------------------------------------------------- */
-  async function startCamera(){
-    errBox.hidden = true;
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      return showError('This browser cannot access the camera. Try Chrome, Safari or Firefox over HTTPS.');
-    }
-
+async function flushNative(){
+  while(pendN!==null){
+    const raw = Math.min(pendN, nativeMax);
+    pendN = null;
+    const t = quantize(raw);
+    if (t < 1) continue;
+    if (Math.abs(t - lastNative) < NATIVE_STEP/2) continue;
+    const adv = [{ zoom: t }];
+    if (torchOn) adv.push({ torch: true });
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          facingMode: { ideal: 'environment' },
-          width:  { ideal: 3840 },
-          height: { ideal: 2160 }
-        }
-      });
-
-      cam.srcObject = stream;
-      try { await cam.play(); } catch (e) {}
-      track = stream.getVideoTracks()[0];
-      readCapabilities();
-      render();
-    } catch (err) {
-      const name = err && err.name;
-      if (name === 'NotAllowedError' || name === 'SecurityError'){
-        showError('Camera permission was denied. Allow camera access in your browser settings, then reload.');
-      } else if (name === 'NotFoundError' || name === 'OverconstrainedError'){
-        showError('No camera was found on this device.');
-      } else {
-        showError('Could not start the camera. ' + (err && err.message ? err.message : ''));
-      }
+      await track.applyConstraints({ advanced: adv });
+      lastNative = t;
+      hw = t;
+    } catch (e) {
+      nativeMax = 0; busyN = false; render(); return;
     }
   }
+  busyN = false;
+}
 
-  function readCapabilities(){
-    nativeRange = null;
-    if (!track || typeof track.getCapabilities !== 'function') return;
+/* ---------------- torch ---------------- */
+async function toggleTorch(){
+  if(!track)return;
+  const next=!torchOn,adv=[];
+  if(nativeMax>0)adv.push({zoom:Math.min(zoom,nativeMax)});
+  adv.push({torch:next});
+  try{
+    await track.applyConstraints({advanced:adv});
+    torchOn=next;
+    if(nativeMax>0)hw=Math.min(zoom,nativeMax);
+  }catch(e){torchBtn.hidden=true;torchOn=false;}
+  torchBtn.classList.toggle('on',torchOn);
+}
 
-    let caps;
-    try { caps = track.getCapabilities(); } catch (e) { return; }
+/* ---------------- camera ---------------- */
+function showError(m){errMsg.textContent=m;errBox.hidden=false;}
 
-    const z = caps.zoom;
-    if (z && typeof z.max === 'number' && z.max > 1.05 &&
-        (z.min == null ? 1 : z.min) <= 1.001){
-      nativeRange = { min: z.min == null ? 1 : z.min, max: z.max };
-      lastNativeSent = -1;
-    }
-    if (caps.torch) btnTorch.hidden = false;
+function stopStream(){
+  if(stream){stream.getTracks().forEach(t=>{try{t.stop()}catch(e){}});stream=null;}
+  try{cam.pause()}catch(e){}
+  cam.srcObject=null;
+  track=null;nativeMax=0;hw=1;torchOn=false;pendN=null;
+  torchBtn.hidden=true;torchBtn.classList.remove('on');
+}
+
+function readCaps(){
+  nativeMax=0;torchBtn.hidden=true;
+  if(!track||typeof track.getCapabilities!=='function')return;
+  let c;try{c=track.getCapabilities()}catch(e){return;}
+  const z=c.zoom;
+  if(z&&typeof z.max==='number'&&z.max>1.05&&(z.min==null||z.min<=1.001))nativeMax=z.max;
+  torchBtn.hidden=c.torch!==true;
+}
+
+async function startCamera(){
+  errBox.hidden=true;
+  stopStream();
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)
+    return showError('This browser cannot access the camera. Try Chrome, Safari or Firefox over HTTPS.');
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160}}});
+    cam.srcObject=stream;
+    try{await cam.play()}catch(e){}
+    track=stream.getVideoTracks()[0]||null;
+    readCaps();render();
+  }catch(err){
+    const n=err&&err.name;
+    if(n==='NotAllowedError'||n==='SecurityError')showError('Camera permission was denied. Allow camera access in your browser settings, then reload.');
+    else if(n==='NotFoundError'||n==='OverconstrainedError')showError('No camera was found on this device.');
+    else showError('Could not start the camera. '+((err&&err.message)||''));
   }
+}
 
-  function showError(msg){
-    errMsg.textContent = msg;
-    errBox.hidden = false;
+/* ---------------- gestures ---------------- */
+const pts=new Map();
+let g=null,tap=null,lastTap=0;
+
+function begin(){
+  const a=[...pts.values()];
+  if(a.length===1)g={t:'pan',x:a[0].x,y:a[0].y,tx,ty};
+  else if(a.length>1){
+    const p=a[0],q=a[1];
+    g={t:'pinch',d:Math.hypot(p.x-q.x,p.y-q.y)||1,mx:(p.x+q.x)/2,my:(p.y+q.y)/2,z:target,tx,ty};
+  }else g=null;
+}
+
+stage.addEventListener('pointerdown',e=>{
+  try{stage.setPointerCapture(e.pointerId)}catch(_){}
+  pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  tap=pts.size===1?{x:e.clientX,y:e.clientY,t:Date.now(),m:false}:null;
+  begin();
+});
+
+stage.addEventListener('pointermove',e=>{
+  const p=pts.get(e.pointerId);if(!p)return;
+  p.x=e.clientX;p.y=e.clientY;
+  if(tap&&Math.hypot(e.clientX-tap.x,e.clientY-tap.y)>10)tap.m=true;
+  if(!g)return;
+  const a=[...pts.values()];
+  if(g.t==='pan'&&a.length===1){
+    tx=g.tx+a[0].x-g.x;ty=g.ty+a[0].y-g.y;render();
+  }else if(g.t==='pinch'&&a.length>1){
+    const p0=a[0],q=a[1];
+    const d=Math.hypot(p0.x-q.x,p0.y-q.y)||1;
+    setZoom(g.z*d/g.d);
+    tx=g.tx+(p0.x+q.x)/2-g.mx;
+    ty=g.ty+(p0.y+q.y)/2-g.my;
   }
+});
 
-  /* ---------------------------------------------------------
-     Pointer gestures: drag to pan, pinch to zoom (multiplicative)
-     --------------------------------------------------------- */
-  const pts = new Map();
-  let gesture = null;
-  let tap = null;
-  let lastTapTime = 0;
+function endPointer(e){
+  if(!pts.has(e.pointerId))return;
+  pts.delete(e.pointerId);
+  if(!pts.size){handleTap();tap=null;}
+  begin();
+}
+stage.addEventListener('pointerup',endPointer);
+stage.addEventListener('pointercancel',e=>{tap=null;endPointer(e)});
 
-  function beginGesture(){
-    const list = [...pts.values()];
-    if (list.length === 1){
-      gesture = { type:'pan', x:list[0].x, y:list[0].y, tx, ty };
-    } else if (list.length >= 2){
-      const a = list[0], b = list[1];
-      gesture = {
-        type: 'pinch',
-        dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
-        mx: (a.x + b.x) / 2,
-        my: (a.y + b.y) / 2,
-        zoom, tx, ty
-      };
-    } else {
-      gesture = null;
-    }
-  }
+function handleTap(){
+  if(!tap||tap.m||Date.now()-tap.t>320)return;
+  const now=Date.now();
+  if(now-lastTap<340){
+    lastTap=0;
+    setZoom(target>1.05?ZMIN:3);
+  }else lastTap=now;
+}
 
-  stage.addEventListener('pointerdown', e => {
-    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
-    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    if (pts.size === 1){
-      tap = { t: Date.now(), x: e.clientX, y: e.clientY, moved: false };
-    } else {
-      tap = null;
-    }
-    beginGesture();
+/* ---------------- buttons ---------------- */
+function bindHold(el,fn){
+  let a=null,b=null;
+  const stop=()=>{clearTimeout(a);clearInterval(b);a=b=null;};
+  const tick=()=>{if(el.disabled){stop();return;}fn();};
+  el.addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    tick();
+    a=setTimeout(()=>{b=setInterval(tick,80)},380);
   });
+  ['pointerup','pointerleave','pointercancel','blur'].forEach(ev=>el.addEventListener(ev,stop));
+}
+bindHold(plus,()=>setZoom(target*STEP));
+bindHold(minus,()=>setZoom(target/STEP));
 
-  stage.addEventListener('pointermove', e => {
-    const p = pts.get(e.pointerId);
-    if (!p) return;
-    p.x = e.clientX;
-    p.y = e.clientY;
+torchBtn.addEventListener('click',toggleTorch);
+retry.addEventListener('click',startCamera);
+addEventListener('resize',render);
+addEventListener('orientationchange',()=>setTimeout(render,250));
+cam.addEventListener('loadedmetadata',render);
 
-    if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 10) tap.moved = true;
-    if (!gesture) return;
-
-    const list = [...pts.values()];
-
-    if (gesture.type === 'pan' && list.length === 1){
-      tx = gesture.tx + (list[0].x - gesture.x);
-      ty = gesture.ty + (list[0].y - gesture.y);
-      render();
-    } else if (gesture.type === 'pinch' && list.length >= 2){
-      const a = list[0], b = list[1];
-      const d  = Math.hypot(a.x - b.x, a.y - b.y) || 1;
-      const mx = (a.x + b.x) / 2;
-      const my = (a.y + b.y) / 2;
-
-      setZoom(gesture.zoom * (d / gesture.dist));   // multiplicative = exponential
-      tx = gesture.tx + (mx - gesture.mx);
-      ty = gesture.ty + (my - gesture.my);
-      render();
-    }
-  });
-
-  function endPointer(e){
-    if (!pts.has(e.pointerId)) return;
-    pts.delete(e.pointerId);
-
-    if (pts.size === 0){
-      handleTap();
-      tap = null;
-    }
-    beginGesture();
-  }
-
-  stage.addEventListener('pointerup', endPointer);
-  stage.addEventListener('pointercancel', endPointer);
-
-  function handleTap(){
-    if (!tap || tap.moved || Date.now() - tap.t > 320) return;
-    const now = Date.now();
-
-    if (now - lastTapTime < 340){          // double tap
-      if (zoom > 1.05){ setZoom(1); tx = 0; ty = 0; render(); }
-      else { setZoom(3); }
-      lastTapTime = 0;
-    } else {
-      lastTapTime = now;
-    }
-  }
-
-  /* ---------------------------------------------------------
-     Controls
-     --------------------------------------------------------- */
-  slider.addEventListener('input', () => {
-    setZoom(sliderToZoom(parseFloat(slider.value)));
-  });
-
-  function bindRepeat(el, action){
-    let t1 = null, t2 = null;
-    const stop = () => { clearTimeout(t1); clearInterval(t2); t1 = t2 = null; };
-
-    el.addEventListener('pointerdown', e => {
-      e.preventDefault();
-      action();
-      t1 = setTimeout(() => { t2 = setInterval(action, 70); }, 420);
-    });
-    ['pointerup','pointerleave','pointercancel'].forEach(ev => el.addEventListener(ev, stop));
-    el.addEventListener('blur', stop);
-  }
-
-  bindRepeat(btnPlus,  () => setZoom(zoom * STEP));
-  bindRepeat(btnMinus, () => setZoom(zoom / STEP));
-
-  btnTorch.addEventListener('click', async () => {
-    if (!track) return;
-    const next = !torchOn;
-    try {
-      await track.applyConstraints({ advanced: [{ torch: next }] });
-      torchOn = next;
-      btnTorch.classList.toggle('on', torchOn);
-    } catch (e) { /* torch unsupported */ }
-  });
-
-  btnRetry.addEventListener('click', startCamera);
-  window.addEventListener('resize', render);
-  window.addEventListener('orientationchange', () => setTimeout(render, 250));
-  cam.addEventListener('loadedmetadata', render);
-
-  /* ---------------------------------------------------------
-     Go
-     --------------------------------------------------------- */
-  render();
-  startCamera();
+render();
+startCamera();
 })();
 </script>
 </body>
