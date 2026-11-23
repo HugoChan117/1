@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#000000">
-<title>Magnifier · 1–10×</title>
+<title>Magnifier</title>
 <style>
 :root{--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);--sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -155,60 +155,19 @@ async function startCamera(){
   stopStream();
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)
     return showError('This browser cannot access the camera. Try Chrome, Safari or Firefox over HTTPS.');
-
-  let deviceId=null;
   try{
-    deviceId=await pickMainRearCamera();
-  }catch(e){ deviceId=null; }
-
-  const base={width:{ideal:3840},height:{ideal:2160}};
-  const tries = [];
-  if(deviceId) tries.push({deviceId:{exact:deviceId},...base});
-  tries.push({facingMode:{exact:'environment'},...base});
-  tries.push({facingMode:{ideal:'environment'},...base});
-  tries.push(base);
-
-  let lastErr=null;
-  for(const video of tries){
-    try{
-      stream=await navigator.mediaDevices.getUserMedia({audio:false,video});
-      cam.srcObject=stream;
-      try{await cam.play()}catch(e){}
-      track=stream.getVideoTracks()[0]||null;
-      readCaps();render();
-      return;
-    }catch(err){ lastErr=err; stopStream(); }
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160}}});
+    cam.srcObject=stream;
+    try{await cam.play()}catch(e){}
+    track=stream.getVideoTracks()[0]||null;
+    readCaps();render();
+  }catch(err){
+    const n=err&&err.name;
+    if(n==='NotAllowedError'||n==='SecurityError')showError('Camera permission was denied. Allow camera access in your browser settings, then reload.');
+    else if(n==='NotFoundError'||n==='OverconstrainedError')showError('No camera was found on this device.');
+    else showError('Could not start the camera. '+((err&&err.message)||''));
   }
-  const n=lastErr&&lastErr.name;
-  if(n==='NotAllowedError'||n==='SecurityError')showError('Camera permission was denied. Allow camera access in your browser settings, then reload.');
-  else if(n==='NotFoundError'||n==='OverconstrainedError')showError('No camera was found on this device.');
-  else showError('Could not start the camera. '+((lastErr&&lastErr.message)||''));
 }
-async function pickMainRearCamera(){
-  const devices=await navigator.mediaDevices.enumerateDevices();
-  const cams=devices.filter(d=>d.kind==='videoinput');
-  if(!cams.length) return null;
-
-  let best=null;
-  for(const d of cams){
-    let s=null;
-    try{
-      s=await navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:d.deviceId}}});
-      const t=s.getVideoTracks()[0];
-      const caps=(t&&typeof t.getCapabilities==='function')?t.getCapabilities():{};
-      const rear=Array.isArray(caps.facingMode)
-        ? caps.facingMode.includes('environment')
-        : true;
-      const zmax=(caps.zoom&&typeof caps.zoom.max==='number')?caps.zoom.max:1;
-      const w=caps.width&&caps.width.max?caps.width.max:0;
-      const score={id:d.deviceId,zmax,w,rear};
-      if(rear && (!best || zmax>best.zmax || (zmax===best.zmax && w>best.w)))
-        best=score;
-    }catch(e){}
-    finally{ if(s) s.getTracks().forEach(t=>{try{t.stop()}catch(_){}}); }
-  }
-  return best?best.id:null;
-  }
 
 /* ---------------- gestures ---------------- */
 const pts=new Map();
