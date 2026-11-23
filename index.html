@@ -632,41 +632,13 @@ const attempts = [
 { video: true, audio: false }
 ];
 
-const acquireDefault = async function () {
+(async function () {
 for (let i = 0; i < attempts.length; i++) {
-try { return await navigator.mediaDevices.getUserMedia(attempts[i]); } catch (e) {}
+try {
+return await navigator.mediaDevices.getUserMedia(attempts[i]);
+} catch (e) {}
 }
 return null;
-};
-
-(async function () {
-let stream = await acquireDefault();
-if (!stream || facingMode !== 'environment') return stream;
-
-try {
-const devices = await navigator.mediaDevices.enumerateDevices();
-const cameras = devices.filter(function (device) { return device.kind === 'videoinput'; });
-// Camera 0 is the preferred main 1x camera on devices that expose multiple lenses.
-const preferred = cameras[0];
-if (!preferred || !preferred.deviceId) return stream;
-
-const activeTrack = stream.getVideoTracks()[0];
-const activeSettings = activeTrack && activeTrack.getSettings();
-if (activeSettings && activeSettings.deviceId === preferred.deviceId) return stream;
-
-try {
-const preferredStream = await navigator.mediaDevices.getUserMedia({
-video: Object.assign({ deviceId: { exact: preferred.deviceId } }, base),
-audio: false
-});
-stream.getTracks().forEach(function (track) { track.stop(); });
-return preferredStream;
-} catch (e) {
-return stream;
-}
-} catch (e) {
-return stream;
-}
 })().then(function (stream) {
 if (token !== initToken) {
 if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
